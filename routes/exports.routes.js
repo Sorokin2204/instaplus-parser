@@ -101,9 +101,8 @@ router.post('/add', upload.single('excelFile'), async (req, res) => {
         categories = doc;
       })
       .then(async () => {
-        const browser = await puppeteer.launch({
-          args: ['--window-size=1920,1080'],
-        });
+        const browser = await puppeteer.launch();
+  
         Promise.allSettled(
           sheetJson.map((obj) => {
             return new Promise((resolve, reject) => {
@@ -120,45 +119,50 @@ router.post('/add', upload.single('excelFile'), async (req, res) => {
                   telegram: [],
                   viber: [],
                 },
-                isGoodSite: false,
+           
                 links: {
                   instagramLink: obj['Активная ссылка'],
                   parsedLinks: [],
                   filterLinks: [],
-                  imageFilterLinks: [],
                   selectedLink: '',
+                  tapLinkImage: ''
                 },
                 Category: [],
                 File: newFile._id,
               });
+             
               ///Scaping instagram URL - get messangers and list sites
               if (newAccount.links.instagramLink) {
                 if (newAccount.links.instagramLink.includes('taplink.cc')) {
-                  let promise = scrapingUrl(newAccount);
-                  promise
-                    .then(() => {
-                      filterUrl(browser, newAccount)
-                        .then(() => {
-                          if (newAccount.links.filterLinks.length == 0) {
-                            newAccount.status = 'accept';
-                          } else {
-                            newAccount.status = 'pendingProcessing';
-                          }
-                          resolve();
-                       
-                        })
-                        .catch(() => {
-                          reject();
-                          console.log('\x1b[31m%s\x1b[0m', 'PROMISE ALL ERROR');
-                        });
-                    })
-                    .catch((reason) => {
-                      reject();
-                      console.log(
-                        '\x1b[31m%s\x1b[0m',
-                        'PROMISE ERROR - ' + newAccount.links.instagramLink,
-                      );
-                    });
+                   grabpage(browser, newAccount.links.instagramLink).then(
+                     (fileName) => {
+                       newAccount.links.tapLinkImage = fileName;
+                     },
+                   ).then(() => {
+  let promise = scrapingUrl(newAccount);
+  promise
+    .then(() => {
+      filterUrl(browser, newAccount)
+        .then(() => {
+          resolve(newAccount);
+        })
+        .catch(() => {
+          resolve(newAccount);
+          console.log('\x1b[31m%s\x1b[0m', 'PROMISE ALL ERROR');
+        });
+    })
+    .catch((reason) => {
+      resolve(newAccount);
+      console.log(
+        '\x1b[31m%s\x1b[0m',
+        'TAPLINK ANALYZE ERROR - ' +
+          reason +
+          '\n' +
+          'LINK - ' +
+          newAccount.links.instagramLink,
+      );
+    });
+                   })
                 } else if (
                   newAccount.links.instagramLink.includes('wa.me/') ||
                   newAccount.links.instagramLink.includes('whatsapp.com/')
@@ -166,12 +170,12 @@ router.post('/add', upload.single('excelFile'), async (req, res) => {
                   newAccount.messengers.whatsApp.push(
                     newAccount.links.instagramLink,
                   );
-                  resolve();
+                  resolve(newAccount);
                 } else if (newAccount.links.instagramLink.includes('t.me/')) {
                   newAccount.messengers.telegram.push(
                     newAccount.links.instagramLink,
                   );
-                  resolve();
+                  resolve(newAccount);
                 } else if (
                   !newAccount.links.instagramLink.includes('facebook') &&
                   !newAccount.links.instagramLink.includes('youtu.be') &&
@@ -179,23 +183,38 @@ router.post('/add', upload.single('excelFile'), async (req, res) => {
                 ) {
                   newAccount.links.selectedLink =
                     newAccount.links.instagramLink;
-                  newAccount.links.filterLinks.push(
-                    newAccount.links.instagramLink,
-                  );
-                    grabpage(browser, newAccount.links.instagramLink).then(
-                      (fileName) => {
-                        newAccount.links.imageFilterLinks.push(fileName);
-                        resolve();
-                      },
-                    );
-                  resolve();
+ grabpage(browser, newAccount.links.instagramLink).then((fileName) => {
+   newAccount.links.filterLinks.push({
+     link: newAccount.links.instagramLink,
+     image: fileName,
+   });
+   resolve(newAccount);
+ });   
                 } else {
-                  resolve();
+                  resolve(newAccount);
                 }
               } else {
-                resolve();
+                resolve(newAccount);
               }
 
+              
+               /// Find category
+               if (newAccount.description) {
+                 for (cat of categories) {
+                   regWord = cat.keyWords
+                     .map((word) => (word = `(?=[\\s\\S]*${word})`))
+                     .join('');
+                   regWord += '[\\s\\S]*$';
+                   //console.log(regWord);
+                   if (newAccount.description.toLowerCase().match(regWord)) {
+                     newAccount.Category.push(cat._id);
+                     // console.log('\x1b[32m%s\x1b[0m', 'REGEX FIND ! - ' + cat.name);
+                     // console.log(newAccount.description.toLowerCase());
+                   } else {
+                   }
+                 }
+               }
+                newAccounts.push(newAccount);
               ///Check instagram PHONE on messengers  - get messegmers
               // if (newAccount.phone && (!newAccount.messengers.telegram || !newAccount.messengers.whatsApp)) {
               //WhatsApp ALI CHECK NUMBER
@@ -213,30 +232,14 @@ router.post('/add', upload.single('excelFile'), async (req, res) => {
               //Telegram ALI CHECK NUMBER
               //Viber ALI CHECK NUMBER
               // }
-
-              /// Find category
-              if (newAccount.description) {
-                for (cat of categories) {
-                  regWord = cat.keyWords
-                    .map((word) => (word = `(?=[\\s\\S]*${word})`))
-                    .join('');
-                  regWord += '[\\s\\S]*$';
-                  //console.log(regWord);
-                  if (newAccount.description.toLowerCase().match(regWord)) {
-                    newAccount.Category.push(cat._id);
-                    // console.log('\x1b[32m%s\x1b[0m', 'REGEX FIND ! - ' + cat.name);
-                    // console.log(newAccount.description.toLowerCase());
-                  } else {
-                  }
-                }
-              }
-
-              if (newAccount.links.filterLinks.length == 0) {
-                newAccount.status = 'accept';
+              
+            }).then((account) => {
+              if (account.links.filterLinks.length == 0) {
+                account.status = 'acceptNoSite';
               } else {
-                newAccount.status = 'pendingProcessing';
+                account.status = 'pendingProcessing';
               }
-              newAccounts.push(newAccount);
+              
             });
           }),
         )
@@ -264,10 +267,10 @@ router.post('/add', upload.single('excelFile'), async (req, res) => {
                   });
                   console.log('FINISH');
                 })
-                .catch(() => {
+                .catch((error) => {
+                  console.log(newAccounts);
                   res.status(500).json({
-                    message:
-                      error.message || 'Что-то пошло не так, попробуйте снова',
+                    message:  error.message || 'Что-то пошло не так, попробуйте снова',
                   });
                   console.log('ERROR FINISH');
                 });
@@ -300,11 +303,11 @@ router.get('/list', async (req, res) => {
         });
         let accountsAcceptCount = await Account.countDocuments({
           File: Types.ObjectId(file._id),
-          status: 'accept',
+          status: {$regex: 'accept'} ,
         });
         let accountsDeniedCount = await Account.countDocuments({
           File: Types.ObjectId(file._id),
-          status: 'denied',
+          status: { $regex: 'denied' },
         });
         let accountsPendingProcessingCount = await Account.countDocuments({
           File: Types.ObjectId(file._id),
@@ -334,7 +337,7 @@ function millisToMinutesAndSeconds(millis) {
   var seconds = ((millis % 60000) / 1000).toFixed(0);
   return minutes + ':' + (seconds < 10 ? '0' : '') + seconds;
 }
-
+////api/exports/:id
 router.get('/:id', async (req, res) => {
   try {
     const currentAccount = await findNextPendingAccount(req.params.id);
@@ -372,17 +375,17 @@ router.get('/:id', async (req, res) => {
       // );
 
       currentAccount.links.domainFilterLinks =
-        currentAccount.links.filterLinks.map((link) => {
-          var parsed = psl.parse(extractHostname(link));
+        currentAccount.links.filterLinks.map((filterLink) => {
+          var parsed = psl.parse(extractHostname(filterLink.link));
           return (
             (parsed.subdomain ? parsed.subdomain + '.' : '') + parsed.domain
           );
         });
-      const allCategories = await Category.find({});
+
 
       res.json({
         currentAccount: currentAccount,
-        allCategories: allCategories,
+      
       });
     } else {
       res.json({ message: 'Все аккаунты просмотренны' });
@@ -391,13 +394,19 @@ router.get('/:id', async (req, res) => {
     res.status(500).json({ message: e.message + 'line : ' + e.lineNumber });
   }
 });
-
+////api/exports/:id
 router.post('/:id', async (req, res) => {
   try {
     let { currentAccount, blackDomains } = req.body;
-    ///Remove domains form object
-    delete currentAccount.links.domainFilterLinks;
-    currentAccount.links.filterLinks = [currentAccount.links.selectedLink];
+   delete currentAccount.links.domainFilterLinks;
+   currentAccount.links.filterLinks =
+     currentAccount.links.filterLinks.map(filterLink => {
+     if(filterLink.link ==  currentAccount.links.selectedLink) {
+       return filterLink
+     } else {
+       fs.unlinkSync(__uploadDir + filterLink.image)
+     }
+    });
     ///Update account
     await Account.findByIdAndUpdate(currentAccount._id, currentAccount);
     ///Add non-selected links form "filterLinks" domains in blacklist
@@ -425,6 +434,8 @@ router.post('/:id', async (req, res) => {
   }
 });
 
+
+
 async function findNextPendingAccount(idFile) {
   var nextAccount = await Account.findOne({
     File: idFile,
@@ -432,14 +443,12 @@ async function findNextPendingAccount(idFile) {
   }).lean();
 
   if (nextAccount) {
-    nextAccount.links.filterLinks = await findUrlInBlackList(nextAccount,
-      nextAccount.links.filterLinks,
-    );
+   nextAccount.links.filterLinks = await findUrlInBlackList(nextAccount);
     if (nextAccount.links.filterLinks != 0) {
       await Account.findByIdAndUpdate(nextAccount._id, nextAccount);
       return nextAccount;
     } else {
-      nextAccount.status = 'accept';
+      nextAccount.status = 'acceptNoSite';
       await Account.findByIdAndUpdate(nextAccount._id, nextAccount);
       findNextPendingAccount(idFile);
     }
@@ -448,19 +457,18 @@ async function findNextPendingAccount(idFile) {
   }
 }
 
-function findUrlInBlackList(account,urls) {
+function findUrlInBlackList(account) {
   let newFilterLinks = [];
   return Promise.allSettled(
-    urls.map((url,i) => {
+    account.links.filterLinks.map((filterLink, i) => {
       return new Promise((resolve, reject) => {
         try {
-          let domain = psl.get(extractHostname(url));
+          let domain = psl.get(extractHostname(filterLink.link));
           BlackLink.exists({ domainName: domain }).then((isBlackLink) => {
             if (isBlackLink) {
-               fs.unlinkSync(__uploadDir + account.links.imageFilterLinks[i]);
-                account.links.imageFilterLinks = account.links.imageFilterLinks.splice(i, 1);
+              fs.unlinkSync(__uploadDir + filterLink.image);
             } else {
-              newFilterLinks.push(url);
+              newFilterLinks.push(filterLink);
             }
             resolve();
           });
@@ -622,10 +630,11 @@ function filterUrl(browser, newAccount) {
                 //   console.log('\x1b[34m%s\x1b[0m', url);
                 resolve();
               } else {
-                //   console.log(url);
-                newAccount.links.filterLinks.push(url);
                 grabpage(browser, url).then((fileName) => {
-                  newAccount.links.imageFilterLinks.push(fileName);
+                  newAccount.links.filterLinks.push({
+                    link: url,
+                    image: fileName,
+                  });
                   resolve();
                 });
               }
@@ -644,37 +653,49 @@ function filterUrl(browser, newAccount) {
 
 async function grabpage(browser, url) {
   try {
-     const page = await browser.newPage();
-
- 
-     await page.setDefaultNavigationTimeout(0);
-  await page.goto(url);
-  const fileName = filenamifyUrl(url);
+     const fileName = filenamifyUrl(url);
   const pathFile = __uploadDir + fileName;
-        let height = await page.evaluate(
-          () => document.documentElement.offsetHeight,
-        );
-        await autoScroll(page);
+  if (
+    !fs.existsSync(pathFile + '.jpeg') &&
+    !fs.existsSync(pathFile + '.webp')
+  ) {
+    const page = await browser.newPage();
+    await page.setViewport({ width: 1240 , height: 1024 });
+    await page.setDefaultNavigationTimeout(0);
+    await page.goto(url);
 
-  await page.screenshot({
-    type: 'jpeg',
-    path: pathFile + '.jpeg',
-    fullPage: true,
-    quality: 80
-  });
+    let height = await page.evaluate(
+      () => document.documentElement.offsetHeight,
+    );
+    await autoScroll(page);
+
+    await page.screenshot({
+      type: 'jpeg',
+      path: pathFile + '.jpeg',
+      fullPage: true,
+      quality: 80,
+   
+    });
     await page.close();
-        if(height > 16380) {
- return fileName + '.jpeg ';
-        }
-         else {
- await sharp(pathFile + '.jpeg')
-   .toFormat('webp')
-   .toFile(pathFile + '.webp');
-   fs.unlinkSync(pathFile + '.jpeg')
-   return fileName + '.webp';
-         }
+    if (height > 16380) {
+      return fileName + '.jpeg ';
+    } else {
+      await sharp(pathFile + '.jpeg')
+        .toFormat('webp')
+        .toFile(pathFile + '.webp');
+      fs.unlinkSync(pathFile + '.jpeg');
+      return fileName + '.webp';
+    }
+  } else {
+    if (fs.existsSync(pathFile + '.webp')) {
+      return fileName + '.webp';
+    } else {
+      return fileName + '.jpeg';
+    }
+  }
+   
   } catch (error) {
-    console.log('SAVE IMAGE ERROR: ' + error.message );
+       console.log('\x1b[31m%s\x1b[0m', 'SAVE IMAGE ERROR: ' + error.message);
     return '';
   }
  

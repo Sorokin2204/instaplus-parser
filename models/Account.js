@@ -8,7 +8,7 @@ var Account = new Schema({
   status: {
     type: String,
     required: true,
-    enum: ['pendingProcessing', 'processing', 'accept', 'denied', 'sent'],
+    enum: ['pendingProcessing', 'processing', 'acceptNoSite', 'acceptBadSite', 'acceptTaplinkNoSite', 'acceptTaplinkWithSite','acceptTaplinkMultipage', 'deniedBadSite', 'deniedGoodSite' ,  'sent'],
   },
   login: {
     type: String,
@@ -27,9 +27,7 @@ var Account = new Schema({
   description: {
     type: String,
   },
-  isGoodSite: {
-    type: Boolean,
-  },
+  
   messengers: {
     whatsApp: [
       {
@@ -51,6 +49,9 @@ var Account = new Schema({
     instagramLink: {
       type: String,
     },
+    tapLinkImage: 
+      {type: String,}
+    ,
     parsedLinks: [
       {
         type: String,
@@ -58,11 +59,13 @@ var Account = new Schema({
     ],
     filterLinks: [
       {
-        type: String,
+        link: {
+          type: String,
+        },
+        image: {
+          type: String
+        }
       },
-    ],
-    imageFilterLinks: [
-      {type: String}
     ],
     selectedLink: {
       type: String,

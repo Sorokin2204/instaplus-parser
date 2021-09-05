@@ -2,6 +2,7 @@ var { Schema, model } = require('mongoose');
 var Category = new Schema({
   name: {
     type: String,
+    unique: true,
   },
   keyWords: [
     {

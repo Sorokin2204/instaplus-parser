@@ -6,6 +6,7 @@ import Select from 'react-select';
 import Iframe from 'react-iframe';
 import '../style.scss';
 import psl from 'psl'
+import { render } from 'react-dom';
 
 export const AccountPage = () => {
        const { loading, request, error, clearError } = useHttp(); 
@@ -13,7 +14,7 @@ export const AccountPage = () => {
        const [currentAccount, setCurrentAccount] = useState({})
        const [categories, setCategories] = useState([])
        const [selectCategories, setSelectCategories] = useState([])
-       const [activeLink, setActiveLink] = useState('')
+       const [activeLink, setActiveLink] = useState({})
        const [activeDomain, setActiveDomain] = useState('')
        const [activeFullDomain, setActiveFullDomain] = useState()
        const [blackDomains, setBlackDomains] = useState([])
@@ -21,24 +22,28 @@ export const AccountPage = () => {
        const [domainFilterLinks, setDomainFilterLinks] = useState([]);
        const [isFullDomain, setIsFullDomain] = useState(false)
        const [isDomain, setIsDomain] = useState(false)
-       const [isGoodSite, setIsGoodSite] = useState(false)
+       const [isActiveLinkTaplink, setIsActiveLinkTaplink] = useState();
+const [activeTabStatus, setActiveTabStatus] = useState();
+       const [activeStatus, setActiveStatus] = useState(false);
+       const [textNewCategory, setTextNewCategory] = useState('')
 
        let {id} = useParams();
-
-const initDefaultValue = (data) => {
-  setCurrentAccount(data.currentAccount);
-  setCategories(data.allCategories);
-  setFilterLinks(data.currentAccount.links.filterLinks.slice());
-  setDomainFilterLinks(data.currentAccount.links.domainFilterLinks.slice());
-  const statusCheckbox =  document.getElementById('status-accept');
-  const firstLink = document.querySelector(
-    '.account__header-filter-item:first-child input',
-  );
-var event = new MouseEvent('click', {
+const event = new MouseEvent('click', {
   view: window,
   bubbles: true,
   cancelable: false,
 });
+const initDefaultValue = (data) => {
+  setCurrentAccount(data.currentAccount);
+ 
+  setFilterLinks(data.currentAccount.links.filterLinks);
+  setDomainFilterLinks(data.currentAccount.links.domainFilterLinks);
+  const statusCheckbox =  document.getElementById('status-accept');
+
+  const firstLink = document.querySelector(
+    '.account__header-filter-item:first-child input',
+  );
+
 statusCheckbox.dispatchEvent(event);
 firstLink.dispatchEvent(event);
      var elems = document.querySelectorAll('.collapsible');
@@ -46,13 +51,16 @@ firstLink.dispatchEvent(event);
        accordion: false,
      });
 };
+
+
+
 ////EVENTS
 
 ///CHECKBOX
-const ChangeHandlerIsGoodSite  = (event) => {
-  let newIsGoodSite = event.target.checked;
-  setIsGoodSite(event.target.checked);
-setCurrentAccount((old) => ({ ...old, isGoodSite: newIsGoodSite }));
+const ChangeHandlerActiveStatus  = (event) => {
+  let newStatus = event.target.id;
+  setActiveStatus(newStatus);
+setCurrentAccount((old) => ({ ...old, status: newStatus }));
 }
 const ChangeHandlerIsFullDomain = (event) => {
   let newIsFullDomain = event.target.checked;
@@ -67,18 +75,13 @@ const ChangeHandlerIsDomain = (event) => {
 };
 ///RADIO
 const ChangeHandlerStatus = (event) => {
-  let newStatus = event.target.value;
-if(newStatus == 'accept') {
-  setIsGoodSite(false);
-  setCurrentAccount((old) => ({ ...old, status: newStatus , isGoodSite: false }));
-} else {
-  setCurrentAccount((old) => ({ ...old, status: newStatus }));
-}
-
+    setActiveTabStatus( event.target.value)
 };
 const ChangeHandlerLink = (event) => {
   let newSelectedSite = event.target.value;
-  setActiveLink(newSelectedSite);
+  let newSelectedSiteImage= event.target.dataset.image;
+  setIsActiveLinkTaplink(event.target.id == 'taplink' ? true : false)
+  setActiveLink( { link: newSelectedSite, image: newSelectedSiteImage});
  setActiveFullDomain(event.target.dataset.fulldomain);
   setActiveDomain(event.target.dataset.domain);
   let domains = domainFilterLinks.map((item,index) => 
@@ -110,20 +113,66 @@ setCurrentAccount((old) => ({
 ///BUTTON
 
 const ClickHandlerNextAcc = async () => {
-     try { 
-        // delete currentAccount.links.domainFilterLinks;
+     try {
        const data = await request(`/api/exports/${id}`, 'POST', {
          currentAccount: currentAccount,
          blackDomains: blackDomains,
        });
        message(data.message);
-     GetCurrentAccount();
+       GetCurrentAccount();
+       console.log('GET WORK AFTER POST ');
      } catch (e) {
        console.log(e.message);
      }
    };
  
+
+   const ClickHandlerAddCategory = async (text) => {
+     try {
+       const data = await request('/api/category/add', 'POST', {
+         nameCategory: textNewCategory,
+       });
+       message(data.message);
+setTextNewCategory('');
+GetListCategory();
+     } catch (e) {
+           console.log(e.message);
+     }
+   }
  
+   const ClickHandlerAddKeyWord = async (obj) => {
+     try {
+         const button = obj.target.closest('button');
+       const keyWordInput = document.querySelector(
+         `input[name=keyword-${button.dataset.id}]`,
+       );
+      const textNewKeyWord = keyWordInput.value;
+       const data = await request('/api/category/keyword/add', 'POST', {
+         nameKeyWord: textNewKeyWord,
+         idCategory: button.dataset.id,
+       });
+       message(data.message);
+       keyWordInput.value = '';
+       GetListCategory();
+     } catch (e) {
+       console.log(e.message);
+     }
+   };
+
+
+   const ClickHandlerRemoveKeyWord = async (obj) => {
+     try {
+       const button = obj.target.closest('button');
+       const data = await request('/api/category/keyword/remove', 'POST', {
+         removeKeyWord: button.dataset.keyword,
+         idCategory: button.dataset.id,
+       });
+       message(data.message);
+       GetListCategory();
+     } catch (e) {
+       console.log(e.message);
+     }
+   };
 
 // const ClickHandlerRemoveDomain = (event) => {
 //    setBlackDomains((old) => [...old, activeDomain]);
@@ -146,7 +195,7 @@ useEffect(() => {
         ? 'http://' + activeFullDomain
         : isDomain
         ? 'http://' + activeDomain
-        : activeLink,
+        : activeLink.link,
     },
   }));
 }, [isFullDomain,isDomain,activeLink])
@@ -157,18 +206,42 @@ useEffect(() => {
 }, [error, message, clearError]);
 
 useEffect(() => {
+  console.log('GET WORK USE EFFECT');
   GetCurrentAccount();
 }, []);
+
+
+useEffect(() => {
+  
+                 const firstRadio = document.querySelector(
+                   '.account__header-checkbox-goodsite:first-of-type',
+                 );
+                 firstRadio?.dispatchEvent(event);
+}, [activeTabStatus])
+
 const GetCurrentAccount = async () => {
   try {
     const data = await request(`/api/exports/${id}`, 'GET');
     message(data.message);
-    //console.log(data.currentAccount);
+    await GetListCategory();
     initDefaultValue(data);
   } catch (e) {
     console.log(e.message);
   }
 };
+
+const GetListCategory = async () => {
+  try {
+    const data = await request(`/api/category/list`, 'GET');
+    message(data.message);
+    setCategories(data.allCategories);
+  } catch (e) {
+    console.log(e.message);
+  }
+};
+
+
+
 // useEffect(() => {
 //   if (blackDomains.length !== 0) {
 //  let newLinks = [];
@@ -187,13 +260,68 @@ const GetCurrentAccount = async () => {
 //   }
 
 // }, [activeDomain]);
-    
+function renderParsedLinks(link) {
+  if (currentAccount.messengers.whatsApp.indexOf(link) !== -1) {
+ return({ linkClass: 'account__header-filter-item--whatsapp', linkIcon: 'whatsapp',
+  linkOrder: 2})
+  } else 
+    if (currentAccount.messengers.telegram.indexOf(link) !== -1) {
+ return({ linkClass: 'account__header-filter-item--telegram', linkIcon: 'telegram', 
+ linkOrder: 3})
+  } else 
+    if (currentAccount.messengers.viber.indexOf(link) !== -1) {
+      return {
+        linkClass: 'account__header-filter-item--viber',
+        linkIcon: 'viber',
+        linkOrder: 4,
+      };
+    } else if (
+      currentAccount.links.filterLinks.findIndex((filterLink) => {
+        return filterLink.link === link;
+      }) === -1
+    ) {
+      return {
+        linkClass: 'account__header-filter-item--blacklist',
+        linkIcon: 'remove_circle', 
+        linkOrder: 1
+      };
+    } else {
+      return '';
+    }
+}  
+
+function renderLink(parsedLink, linkIcon, linkClass) {
+  return (
+    <div
+      className={
+        'account__header-filter-item account__header-filter-item--' + linkClass
+      }>
+      <i className="material-icons">{linkIcon}</i>
+      <input
+        className="account__header-filter-radio"
+        name="selectedLink"
+        id={`selectedLink-${parsedLink}`}
+        type="radio"
+        value={parsedLink}
+      />
+      <label htmlFor={`selectedLink-${parsedLink}`}>{parsedLink}</label>
+      <a
+        className="account__header-filter-link"
+        href={parsedLink}
+        target="_blank"
+        rel="noopener noreferrer">
+        <i className="material-icons">open_in_new</i>
+      </a>
+    </div>
+  );
+}
 
   return (
     <>
       {Object.keys(currentAccount).length !== 0 && filterLinks.length !== 0 ? (
         <div className="account">
-          <header className="account__header">
+          <header className="account__header"></header>
+          <aside className="account__aside account__aside-left">
             <div className="account__header-status-box">
               <input
                 className="account__header-status-radio account__header-status-radio--green"
@@ -201,9 +329,7 @@ const GetCurrentAccount = async () => {
                 id="status-accept"
                 type="radio"
                 value="accept"
-                onChange={(e) => {
-                  ChangeHandlerStatus(e);
-                }}
+                onChange={ChangeHandlerStatus}
               />
               <label htmlFor="status-accept">Берем</label>
 
@@ -218,22 +344,91 @@ const GetCurrentAccount = async () => {
               <label htmlFor="status-denied">Не берем</label>
             </div>
             <div className="account__header-content">
-              {currentAccount.status == 'denied' ? (
+              {activeTabStatus == 'denied' ? (
                 <>
                   <input
                     className="account__header-checkbox-goodsite"
-                    type="checkbox"
-                    name="isGoodSite"
-                    id="isGoodSite"
-                    onChange={ChangeHandlerIsGoodSite}
-                    checked={isGoodSite}
+                    type="radio"
+                    name="denied-radio"
+                    id="deniedGoodSite"
+                    onChange={ChangeHandlerActiveStatus}
                   />
-                  <label htmlFor="isGoodSite">
+                  <label htmlFor="deniedGoodSite">
                     Сайт хороший ! Добавим в подборку
+                  </label>
+                  <input
+                    className="account__header-checkbox-goodsite"
+                    type="radio"
+                    name="denied-radio"
+                    id="deniedBadSite"
+                    onChange={ChangeHandlerActiveStatus}
+                  />
+                  <label htmlFor="deniedBadSite">
+                    Сайт плохой или это не наш клиент
                   </label>
                 </>
               ) : (
-                <div style={{ height: '44px' }}></div>
+                ''
+              )}
+              {activeTabStatus == 'accept' &&
+              currentAccount.links.instagramLink.includes('taplink') ? (
+                <>
+                  <input
+                    className="account__header-checkbox-goodsite"
+                    type="radio"
+                    name="accept-taplink-radio"
+                    id="acceptTaplinkNoSite"
+                    onChange={ChangeHandlerActiveStatus}
+                  />
+                  <label htmlFor="acceptTaplinkNoSite">
+                    Это таплинк без сайта
+                  </label>
+                  <input
+                    className="account__header-checkbox-goodsite"
+                    type="radio"
+                    name="accept-taplink-radio"
+                    id="acceptTaplinkWithSite"
+                    onChange={ChangeHandlerActiveStatus}
+                  />
+                  <label htmlFor="acceptTaplinkWithSite">
+                    Это таплинк с плохим сайтов
+                  </label>
+                  <input
+                    className="account__header-checkbox-goodsite"
+                    type="radio"
+                    name="accept-taplink-radio"
+                    id="acceptTaplinkMultipage"
+                    onChange={ChangeHandlerActiveStatus}
+                  />
+                  <label htmlFor="acceptTaplinkMultipage">
+                    Это таплинк многостраничник
+                  </label>
+                </>
+              ) : (
+                ''
+              )}
+              {activeTabStatus == 'accept' &&
+              !currentAccount.links.instagramLink.includes('taplink') ? (
+                <>
+                  <input
+                    className="account__header-checkbox-goodsite"
+                    type="radio"
+                    name="accept-radio"
+                    id="acceptNoSite"
+                    onChange={ChangeHandlerActiveStatus}
+                  />
+                  <label htmlFor="acceptNoSite">Сайта нет</label>
+                  <input
+                    className="account__header-checkbox-goodsite"
+                    type="radio"
+                    name="accept-radio"
+                    id="acceptBadSite"
+                    onChange={ChangeHandlerActiveStatus}
+                  />
+                  <label htmlFor="acceptBadSite">Сайта плохой</label>
+                </>
+              ) : (
+                ''
               )}
 
               <p className="account__header-desc">
@@ -270,6 +465,24 @@ const GetCurrentAccount = async () => {
                   <li>
                     <div className="collapsible-header">Ключевые слова</div>
                     <div className="collapsible-body">
+                      <div className="collapsible-input-box">
+                        <input
+                          type="text"
+                          name="category-name"
+                          placeholder="Новая категория..."
+                          className="collapsible-input"
+                          value={textNewCategory}
+                          onChange={(text) => {
+                            setTextNewCategory(text.target.value);
+                          }}
+                        />
+                        <button
+                          disabled={!textNewCategory}
+                          className="collapsible-button btn-floating "
+                          onClick={ClickHandlerAddCategory}>
+                          <i className="material-icons">add</i>
+                        </button>
+                      </div>
                       <ul className="collapsible-list">
                         {selectCategories.length !== 0
                           ? selectCategories.map((cat) => {
@@ -281,12 +494,43 @@ const GetCurrentAccount = async () => {
                                   <p className="collapsible-item-header">
                                     {categories[catIndex].name}
                                   </p>
+                                  <div className="collapsible-input-box">
+                                    <input
+                                      type="text"
+                                      name={'keyword-' + cat.value}
+                                      placeholder="Новое слово..."
+                                      className="collapsible-input"
+                                      onChange={(obj) => {
+                                        obj.target.value
+                                          ? (document.querySelector(
+                                              `button[data-id="${cat.value}"]`,
+                                            ).disabled = false)
+                                          : (document.querySelector(
+                                              `button[data-id="${cat.value}"]`,
+                                            ).disabled = true);
+                                      }}
+                                  
+                                    />
+                                    <button
+                                      data-id={cat.value}
+                                      className="collapsible-button btn-floating "
+                                      onClick={ClickHandlerAddKeyWord}
+                                      >
+                                        
+                                      <i className="material-icons">add</i>
+                                    </button>
+                                  </div>
                                   <ul className="collapsible-keyword-list">
                                     {categories[catIndex].keyWords.map(
                                       (keyWord) => {
                                         return (
                                           <li className="collapsible-keyword-item">
                                             {keyWord}
+                                            <button onClick={ClickHandlerRemoveKeyWord} data-id={cat.value} data-keyword={keyWord} className="collapsible-keyword-remove-btn">
+                                              <i className="material-icons">
+                                                close
+                                              </i>
+                                            </button>
                                           </li>
                                         );
                                       },
@@ -302,23 +546,54 @@ const GetCurrentAccount = async () => {
                 </ul>
               </div>
             </div>
-          </header>
-          <aside className="account__aside account__aside-left">
             <a
-              href={`https://instagram.com/${currentAccount.login}`}
+              href={`https://www.instagram.com/${currentAccount.login}`}
               target="_blank"
               rel="noopener noreferrer"
               className="account__aside-instagram-link">
-              {currentAccount.login}{' '}
+              {currentAccount.login}
               <i className="material-icons">open_in_new</i>
             </a>
             <div className="account__header-filter-list">
-              {filterLinks.map((link, i) => {
+              {currentAccount.links.instagramLink.includes('taplink') ? (
+                <div
+                  className={
+                    'account__header-filter-item ' +
+                    (activeLink.link == currentAccount.links.instagramLink
+                      ? 'account__header-filter-item--active'
+                      : '')
+                  }>
+                  <i className="material-icons">my_location</i>
+                  <input
+                    className="account__header-filter-radio"
+                    name="selectedLink"
+                    id="taplink"
+                    type="radio"
+                    value={currentAccount.links.instagramLink}
+                    data-image={currentAccount.links.tapLinkImage}
+                    onChange={ChangeHandlerLink}
+                  />
+                  <label htmlFor="taplink">
+                    {currentAccount.links.instagramLink}
+                  </label>
+                  <a
+                    className="account__header-filter-link"
+                    href={currentAccount.links.instagramLink}
+                    target="_blank"
+                    rel="noopener noreferrer">
+                    <i className="material-icons">open_in_new</i>
+                  </a>
+                </div>
+              ) : (
+                ''
+              )}
+
+              {filterLinks.map((filterLink, i) => {
                 return (
                   <div
                     className={
                       'account__header-filter-item ' +
-                      (activeLink == link
+                      (activeLink.link == filterLink.link
                         ? 'account__header-filter-item--active'
                         : '')
                       //   +
@@ -329,21 +604,24 @@ const GetCurrentAccount = async () => {
                     <input
                       className="account__header-filter-radio"
                       name="selectedLink"
-                      id={`selectedLink-${link}`}
+                      id={`selectedLink-${filterLink.link}`}
                       type="radio"
-                      value={link}
+                      value={filterLink.link}
                       data-fulldomain={
                         currentAccount.links.domainFilterLinks[i]
                       }
                       data-domain={psl.get(
                         currentAccount.links.domainFilterLinks[i],
                       )}
+                      data-image={filterLink.image}
                       onChange={ChangeHandlerLink}
                     />
-                    <label htmlFor={`selectedLink-${link}`}> {link}</label>
+                    <label htmlFor={`selectedLink-${filterLink.link}`}>
+                      {filterLink.link}
+                    </label>
                     <a
                       className="account__header-filter-link"
-                      href={link}
+                      href={filterLink.link}
                       target="_blank"
                       rel="noopener noreferrer">
                       <i className="material-icons">open_in_new</i>
@@ -351,6 +629,32 @@ const GetCurrentAccount = async () => {
                   </div>
                 );
               })}
+
+              {currentAccount.links.parsedLinks.map((parsedLink) => {
+                if (
+                  currentAccount.links.filterLinks.findIndex((filterLink) => {
+                    return filterLink.link === parsedLink;
+                  }) === -1 &&
+                  currentAccount.messengers.whatsApp.indexOf(parsedLink) ===
+                    -1 &&
+                  currentAccount.messengers.telegram.indexOf(parsedLink) ===
+                    -1 &&
+                  currentAccount.messengers.viber.indexOf(parsedLink) === -1
+                ) {
+                  return renderLink(parsedLink, 'remove_circle', 'blacklist');
+                }
+              })}
+
+              {currentAccount.messengers.whatsApp.map((parsedLink) => {
+                return renderLink(parsedLink, 'whatsapp', 'whatsapp');
+              })}
+              {currentAccount.messengers.telegram.map((parsedLink) => {
+                return renderLink(parsedLink, 'telegram', 'telegram');
+              })}
+              {currentAccount.messengers.viber.map((viberLink) => {
+                return renderLink(viberLink, 'viber', 'viber');
+              })}
+
               {activeFullDomain ? (
                 <>
                   <input
@@ -429,6 +733,15 @@ const GetCurrentAccount = async () => {
                 // })
               }
             </div>
+            <div className="account__footer-btn-box">
+              <button className="btn-large  red lighten-1">Назад</button>
+              <button
+                disabled={selectCategories.length !== 1 || isActiveLinkTaplink}
+                className="btn-large  green lighten-1"
+                onClick={ClickHandlerNextAcc}>
+                Далее
+              </button>
+            </div>
           </aside>
           <main className="account__body">
             {/* <Iframe
@@ -441,21 +754,21 @@ const GetCurrentAccount = async () => {
               position="relative"
               frameborder="0"
             /> */}
-            <img src={process.env.PUBLIC_URL + '/uploads/' + currentAccount.links.imageFilterLinks[currentAccount.links.filterLinks.indexOf(activeLink)]} alt="" />
+            <div className="account__site-img-box">
+              {activeLink.image ? (
+                <img
+                  src={process.env.PUBLIC_URL + '/uploads/' + activeLink.image}
+                  alt=""
+                />
+              ) : (
+                <p>Скриншот не сделан. Скорее всего сайт не работает</p>
+              )}
+            </div>
+
             {/* <iframe src={activeLink} frameBorder="0" loading="lazy"></iframe> */}
           </main>
           {/* <aside className="account__aside account__aside-right">right </aside> */}
-          <footer className="account__footer">
-            <div className="account__footer-btn-box">
-              <button className="btn-large  red lighten-1">Назад</button>
-              <button
-                disabled={selectCategories.length !== 1}
-                className="btn-large  green lighten-1"
-                onClick={ClickHandlerNextAcc}>
-                Далее
-              </button>
-            </div>
-          </footer>
+          <footer className="account__footer"></footer>
         </div>
       ) : (
         ''
