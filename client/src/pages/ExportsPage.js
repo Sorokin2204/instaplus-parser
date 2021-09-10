@@ -3,6 +3,11 @@ import React, { useRef, useState, useEffect } from 'react';
 import { NavLink } from 'react-router-dom';
 import { useHttp } from '../hooks/http.hook'
 import { useMessage } from '../hooks/message.hook';
+import openSocket from 'socket.io-client';
+
+const socket = openSocket('http://localhost:3000');
+
+
 
 export const  ExportsPage = () => {
    const { loading, request, error, clearError} = useHttp();
@@ -10,9 +15,31 @@ export const  ExportsPage = () => {
     const excelFile = useRef();
     const message = useMessage();
     const [data, setData] = useState([]);
+    const [loadingText, setLoadingText] = useState('');
     const changeHandlerAddFormExport = event => {
         excelFile.current.files[0] ? setIsDisabled(false) : setIsDisabled(true);
     }
+
+    const ClickHandlerSendMessage = async (obj) => {
+     try {
+       
+       const data = await request(`/api/exports/send/${obj.target.dataset.id}`, 'GET');
+       message(data.message);
+     } catch (e) {
+       console.log(e.message);
+     }
+    }
+
+
+    
+
+useEffect(() => {
+  if(loadingText == '') {
+    console.log('USE EFFECT LOADING');
+         getFiles();
+          //setIsDisabled(false);
+  } 
+}, [loadingText])
 
 useEffect(() => {
   message(error);
@@ -28,37 +55,72 @@ useEffect(() => {
               'POST', formData , {}, true
             );
              message(data.message);
-             
+              getFiles();
         } catch (e) {
             console.log(e.message);
         }
     }
 
     useEffect( () => {
-      console.log('useEff');
-      async function getFiles()  {
- try {
-   const dataFiles = await request('/api/exports/list', 'GET');
-   console.log(dataFiles);
-   setData(dataFiles);
- } catch (e) {
-   console.log(e.message);
- }
-      }
-         getFiles();
+        setIsDisabled(true);
+      socket.on('connection', (loadData) => {
+        console.log(loadData);
+        setLoadingText(loadData);
+      });
+
+        //  getFiles();
 },[]) 
-    
+      async function getFiles() {
+        try {
+          const dataFiles = await request('/api/exports/list', 'GET');
+          console.log(dataFiles);
+          if(dataFiles.findIndex((file) => { 
+            return file.status === 'loading'
+          }) !== -1) {
+            setIsDisabled(true)
+          } else  {
+             setIsDisabled(false);
+          }
+          setData(dataFiles);
+        } catch (e) {
+          console.log(e.message);
+        }
+      }
+
+
         function getFileStatus(status,countPending,id) {
           switch (status) {
             case 'active':
-                return (
-                  <td class="td-red">
-                    {`Осталось - ${countPending}`}
-                  <NavLink to={'/exports/' + id}>
-Перейти
-                  </NavLink>
-                  </td>
-                );
+              return (
+                <td class="td-red">
+                  {`Осталось - ${countPending}`}
+                  <NavLink to={'/exports/' + id}>Перейти</NavLink>
+                </td>
+              );
+              break;
+            case 'pendingSending':
+              return (
+                <td class="amber">
+                  <div className="td-box">
+                    <span className="td-text">Ожидаеться отправки</span>
+                    <button
+                      onClick={ClickHandlerSendMessage}
+                      class="btn"
+                      data-id={id}>
+                      Отправить
+                    </button>
+                  </div>
+                </td>
+              );
+              break;
+            case 'loading':
+              return (
+                <td class="amber">
+                  <div className="td-box">
+                    <span className="td-text">Обработка...</span>
+                  </div>
+                </td>
+              );
               break;
             default:
               break;
@@ -80,16 +142,22 @@ useEffect(() => {
           <div className="btn">
             <span>1.Выбрать Excel</span>
             <input
+           
               type="file"
               name="excelFile"
               id="excelFile"
               ref={excelFile}
               onChange={changeHandlerAddFormExport}
               accept=".xlsx"
+              disabled={isDisabled}
             />
           </div>
           <div className="file-path-wrapper">
-            <input className="file-path validate" type="text" />
+            <input
+              className="file-path validate"
+              type="text"
+              disabled={isDisabled}
+            />
           </div>
           <button
             onClick={registerHandlerAddFormExport}
@@ -114,6 +182,7 @@ useEffect(() => {
           ) : (
             ''
           )}
+          <span>{loadingText}</span>
         </div>
 
         {/* <input
@@ -161,7 +230,27 @@ useEffect(() => {
 
               <tbody>
                 {data.map((file) => {
-                  return (
+                  return file.status == 'loading' ||
+                    file.status == 'errorLoading' ? (
+                    <tr data-id={file._id} onClick={clickHandlerTableRow}>
+                      <td>
+                        {moment(file.dateCreated).format(
+                          'DD.MM.YYYY  HH:MM:SS',
+                        )}
+                      </td>
+                      <td>{file.excelFileName}</td>
+                      <td>-</td>
+                      <td>-</td>
+                      <td className="td-gray">-</td>
+                      <td className="td-green">-</td>
+                      <td className="td-red">-</td>
+                      {getFileStatus(
+                        file.status,
+                        file.accountsPendingProcessingCount,
+                        file._id,
+                      )}
+                    </tr>
+                  ) : (
                     <tr data-id={file._id} onClick={clickHandlerTableRow}>
                       <td>
                         {moment(file.dateCreated).format(

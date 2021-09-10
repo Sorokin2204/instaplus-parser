@@ -13,7 +13,7 @@ var File = new Schema({
   },
   status: {
     type: String,
-    enum: ['loading', 'active', 'pendingSending', 'sending ', 'complete'],
+    enum: ['loading', 'errorLoading' ,'active', 'pendingSending', 'sending ', 'complete'],
   },
   accountsPeinding: [
     {

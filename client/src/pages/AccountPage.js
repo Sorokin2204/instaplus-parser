@@ -1,5 +1,5 @@
 import React, { useEffect, useRef, useState } from 'react'
-import { useParams } from 'react-router-dom';
+import { NavLink, Redirect, useParams } from 'react-router-dom';
 import { useHttp } from '../hooks/http.hook';
 import { useMessage } from '../hooks/message.hook';
 import Select from 'react-select';
@@ -26,6 +26,7 @@ export const AccountPage = () => {
 const [activeTabStatus, setActiveTabStatus] = useState();
        const [activeStatus, setActiveStatus] = useState(false);
        const [textNewCategory, setTextNewCategory] = useState('')
+       const [isDefaultCategory, setIsDefaultCategory] = useState(false)
 
        let {id} = useParams();
 const event = new MouseEvent('click', {
@@ -34,8 +35,8 @@ const event = new MouseEvent('click', {
   cancelable: false,
 });
 const initDefaultValue = (data) => {
-  setCurrentAccount(data.currentAccount);
  
+  setCurrentAccount(data.currentAccount);
   setFilterLinks(data.currentAccount.links.filterLinks);
   setDomainFilterLinks(data.currentAccount.links.domainFilterLinks);
   const statusCheckbox =  document.getElementById('status-accept');
@@ -43,9 +44,14 @@ const initDefaultValue = (data) => {
   const firstLink = document.querySelector(
     '.account__header-filter-item:first-child input',
   );
+  const firstRadio = document.querySelector(
+    '.account__header-checkbox-goodsite:first-of-type',
+  );
 
 statusCheckbox.dispatchEvent(event);
 firstLink.dispatchEvent(event);
+  firstRadio?.dispatchEvent(event);
+
      var elems = document.querySelectorAll('.collapsible');
      var instances = window.M.Collapsible.init(elems, {
        accordion: false,
@@ -78,6 +84,7 @@ const ChangeHandlerStatus = (event) => {
     setActiveTabStatus( event.target.value)
 };
 const ChangeHandlerLink = (event) => {
+  console.log(selectCategories);
   let newSelectedSite = event.target.value;
   let newSelectedSiteImage= event.target.dataset.image;
   setIsActiveLinkTaplink(event.target.id == 'taplink' ? true : false)
@@ -96,12 +103,12 @@ const ChangeHandlerLink = (event) => {
     return (item !== event.target.dataset.domain)
   });
  
-   console.log(domains);
+  // console.log(domains);
    setBlackDomains(domains);
 };
 
 ///SELECT
-const ChangeHandlerCategory = (event) => {
+const ChangeHandlerCategory = (event, {action}) => {
   setSelectCategories(event);
 setCurrentAccount((old) => ({
   ...old,
@@ -119,7 +126,7 @@ const ClickHandlerNextAcc = async () => {
          blackDomains: blackDomains,
        });
        message(data.message);
-       GetCurrentAccount();
+       window.location.reload();
        console.log('GET WORK AFTER POST ');
      } catch (e) {
        console.log(e.message);
@@ -180,9 +187,30 @@ GetListCategory();
 // };
 
 ////HOOKS
+
 useEffect(() => {
 
-  console.log(currentAccount);
+if (!isDefaultCategory && Object.keys(currentAccount).length !== 0) {
+  const defaultCategories = currentAccount.Category.map((catAcc) => {
+    let catIndex = categories.findIndex((cat) => {
+      return cat._id == catAcc;
+    });
+    if (catIndex !== -1) {
+      return {
+        value: categories[catIndex]._id,
+        label: categories[catIndex].name,
+      };
+    }
+  });
+
+  setSelectCategories(defaultCategories);
+  setIsDefaultCategory(true);
+}
+}, [categories])
+
+useEffect(() => {
+
+  //console.log(currentAccount);
 }, [currentAccount]);
 
 
@@ -210,7 +238,6 @@ useEffect(() => {
   GetCurrentAccount();
 }, []);
 
-
 useEffect(() => {
   
                  const firstRadio = document.querySelector(
@@ -223,8 +250,14 @@ const GetCurrentAccount = async () => {
   try {
     const data = await request(`/api/exports/${id}`, 'GET');
     message(data.message);
-    await GetListCategory();
+    if(data.currentAccount != '') {
+ 
     initDefaultValue(data);
+     await GetListCategory();
+    } 
+      
+    
+
   } catch (e) {
     console.log(e.message);
   }
@@ -434,19 +467,9 @@ function renderLink(parsedLink, linkIcon, linkClass) {
               <p className="account__header-desc">
                 {currentAccount.description}
               </p>
-              {categories.length !== 0 ? (
+              {categories.length !== 0 && isDefaultCategory ? (
                 <Select
-                  defaultValue={currentAccount.Category.map((catAcc) => {
-                    let catIndex = categories.findIndex((cat) => {
-                      return cat._id == catAcc;
-                    });
-                    if (catIndex !== -1) {
-                      return {
-                        value: categories[catIndex]._id,
-                        label: categories[catIndex].name,
-                      };
-                    }
-                  })}
+                  defaultValue={selectCategories}
                   placeholder={'Выберите категорию...'}
                   isMulti
                   name="Category"
@@ -509,14 +532,11 @@ function renderLink(parsedLink, linkIcon, linkClass) {
                                               `button[data-id="${cat.value}"]`,
                                             ).disabled = true);
                                       }}
-                                  
                                     />
                                     <button
                                       data-id={cat.value}
                                       className="collapsible-button btn-floating "
-                                      onClick={ClickHandlerAddKeyWord}
-                                      >
-                                        
+                                      onClick={ClickHandlerAddKeyWord}>
                                       <i className="material-icons">add</i>
                                     </button>
                                   </div>
@@ -526,7 +546,13 @@ function renderLink(parsedLink, linkIcon, linkClass) {
                                         return (
                                           <li className="collapsible-keyword-item">
                                             {keyWord}
-                                            <button onClick={ClickHandlerRemoveKeyWord} data-id={cat.value} data-keyword={keyWord} className="collapsible-keyword-remove-btn">
+                                            <button
+                                              onClick={
+                                                ClickHandlerRemoveKeyWord
+                                              }
+                                              data-id={cat.value}
+                                              data-keyword={keyWord}
+                                              className="collapsible-keyword-remove-btn">
                                               <i className="material-icons">
                                                 close
                                               </i>
@@ -736,7 +762,15 @@ function renderLink(parsedLink, linkIcon, linkClass) {
             <div className="account__footer-btn-box">
               <button className="btn-large  red lighten-1">Назад</button>
               <button
-                disabled={selectCategories.length !== 1 || isActiveLinkTaplink}
+                disabled={
+                  selectCategories.length !== 1 ||
+                  (isActiveLinkTaplink &&
+                    currentAccount.status !== 'acceptTaplinkNoSite' &&
+                    currentAccount.status !== 'acceptTaplinkMultipage') ||
+                  (!isActiveLinkTaplink &&
+                    (currentAccount.status === 'acceptTaplinkNoSite' ||
+                      currentAccount.status === 'acceptTaplinkMultipage'))
+                }
                 className="btn-large  green lighten-1"
                 onClick={ClickHandlerNextAcc}>
                 Далее
@@ -744,35 +778,30 @@ function renderLink(parsedLink, linkIcon, linkClass) {
             </div>
           </aside>
           <main className="account__body">
-            {/* <Iframe
-              url={activeLink}
-              width="450px"
-              height="450px"
-              id="myId"
-              className="myClassname"
-              display="initial"
-              position="relative"
-              frameborder="0"
-            /> */}
             <div className="account__site-img-box">
               {activeLink.image ? (
                 <img
                   src={process.env.PUBLIC_URL + '/uploads/' + activeLink.image}
                   alt=""
+                  onError={
+                    (obj) => {
+                      obj.target.src = window.location.origin + 'no-image.png';
+                    }
+                    // process.env.PUBLIC_URL + 'no-image.png'
+                  }
                 />
               ) : (
                 <p>Скриншот не сделан. Скорее всего сайт не работает</p>
               )}
             </div>
-
-            {/* <iframe src={activeLink} frameBorder="0" loading="lazy"></iframe> */}
           </main>
           {/* <aside className="account__aside account__aside-right">right </aside> */}
           <footer className="account__footer"></footer>
         </div>
       ) : (
-        ''
+        <NavLink className='account__btn-home btn btn-large' to='/exports/'>На главную</NavLink>
       )}
     </>
   );
 };
+
