@@ -7,14 +7,14 @@ import openSocket from 'socket.io-client';
 
 const socket = openSocket('http://localhost:3000');
 
-
-
 export const  ExportsPage = () => {
    const { loading, request, error, clearError} = useHttp();
    const [isDisabled, setIsDisabled] = useState(true)
     const excelFile = useRef();
+    const newSenderAccounts = useRef();
     const message = useMessage();
     const [data, setData] = useState([]);
+    const [senderAccounts, setSenderAccounts] = useState([]);
     const [loadingText, setLoadingText] = useState('');
     const changeHandlerAddFormExport = event => {
         excelFile.current.files[0] ? setIsDisabled(false) : setIsDisabled(true);
@@ -30,10 +30,37 @@ export const  ExportsPage = () => {
      }
     }
 
+    const ClickHandlerAddSenderAccounts = async (obj) => {
+      try {
+        const data = await request(`/api/exports/sender-accounts/add/`, 'POST', {
+          listSenderAccounts: newSenderAccounts.current,
+        });
+        message(data.message);
+        document.getElementById('listSenderAccounts').value = '';
+        getSenderAccounts();
+      } catch (e) {
+        console.log(e.message);
+      }
+    };
 
+   const ClickHandlerActiveSenderAccount = async (obj) => {
+      try {
+        
+        const data = await request(`/api/exports/sender-accounts/reset/${obj.target.dataset.id}`, 'POST', {
+        
+        });
+        message(data.message);
+        getSenderAccounts();
+      } catch (e) {
+        console.log(e.message);
+      }
+    };
     
 
 useEffect(() => {
+   var elems = document.querySelectorAll('.modal');
+   var instances = window.M.Modal.init(elems);
+   getSenderAccounts();
   if(loadingText == '') {
     console.log('USE EFFECT LOADING');
          getFiles();
@@ -86,6 +113,21 @@ useEffect(() => {
           console.log(e.message);
         }
       }
+
+      async function getSenderAccounts() {
+        try {
+          const dataFiles = await request(
+            '/api/exports/sender-accounts/list/',
+            'GET',
+          );
+          setSenderAccounts(dataFiles.senderAccounts);
+        } catch (e) {
+          console.log(e.message);
+        }
+      }
+
+
+
 
 
         function getFileStatus(status,countPending,id) {
@@ -142,7 +184,6 @@ useEffect(() => {
           <div className="btn">
             <span>1.Выбрать Excel</span>
             <input
-           
               type="file"
               name="excelFile"
               id="excelFile"
@@ -185,6 +226,91 @@ useEffect(() => {
           <span>{loadingText}</span>
         </div>
 
+        <button data-target="modal1" class="btn modal-trigger">
+          Аккаунты
+        </button>
+
+        <div id="modal1" class="modal modal-fixed-footer">
+          <div class="modal-content">
+            <h4>Аккаунты отправители</h4>
+            <textarea
+              className="materialize-textarea"
+              name="listSenderAccounts"
+              id="listSenderAccounts"
+              cols="30"
+              rows="10"
+              placeholder="Вставьте список аккаунтов, каждый должен быть с новой строки"
+              onChange={(obj) => {
+                newSenderAccounts.current = obj.target.value;
+              }}></textarea>
+            <button className="btn" onClick={ClickHandlerAddSenderAccounts}>
+              Добавить
+            </button>
+
+            {senderAccounts && senderAccounts.length != 0 ? (
+              <div className="row">
+                <table style={{ padding: '0px' }}>
+                  <thead>
+                    <tr>
+                      <th>Логин</th>
+                      <th>Пароль</th>
+                      <th>Последняя отправка</th>
+                      <th>Статус</th>
+                      <th></th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {senderAccounts.map((acc) => {
+                      return (
+                        <tr>
+                          <td>{acc.login}</td>
+                          <td>{acc.password}</td>
+
+                          {moment(acc.lastSentDate).isAfter(new Date()) ||
+                          !acc.lastSentDate ? (
+                            <td className="td-green">
+                              {!acc.lastSentDate
+                                ? '-'
+                                : moment(acc.lastSentDate).format(
+                                    'DD.MM.YYYY  HH:MM:SS',
+                                  )}
+                            </td>
+                          ) : (
+                            <td className="td-red">
+                              {moment(acc.lastSentDate).format(
+                                'DD.MM.YYYY  HH:MM:SS',
+                              )}
+                            </td>
+                          )}
+
+                          {acc.isWork ? (
+                            <td className="td-green">Работает</td>
+                          ) : (
+                            <td className="td-red">Не работает</td>
+                          )}
+                          <td>
+                            <button className="btn" data-id={acc._id} onClick={ClickHandlerActiveSenderAccount}>
+                              Сброс
+                            </button>
+                          </td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
+              </div>
+            ) : (
+              ''
+            )}
+          </div>
+          <div class="modal-footer">
+            <a href="#!" class="modal-close waves-effect waves-green btn-flat">
+              Закрыть
+            </a>
+          </div>
+        </div>
+
         {/* <input
           type="file"
           name="excelFile"
@@ -223,6 +349,12 @@ useEffect(() => {
                   <th>Проанализированно</th>
                   <th class="td-gray">Повторных</th>
                   <th class="td-green">Принято</th>
+                  <th>Без сайта</th>
+                  <th>С плохим сайтом</th>
+                  <th>Таплинк без сайта</th>
+                  <th>Таплинк с плохим сайтом</th>
+                  <th>Таплинк-лендинг</th>
+                  <th>Отправленно</th>
                   <th class="td-red">Отклонено</th>
                   <th>Статус</th>
                 </tr>
@@ -262,6 +394,12 @@ useEffect(() => {
                       <td>{file.accountsAnalyzedCount}</td>
                       <td className="td-gray">{file.accountsRepeatingCount}</td>
                       <td className="td-green">{file.accountsAcceptCount}</td>
+                      <td>{file.accountsAcceptNoSite}</td>
+                      <td>{file.accountsAcceptBadSite}</td>
+                      <td>{file.accountsAcceptTaplinkNoSite}</td>
+                      <td>{file.accountsAcceptTaplinkWithSite}</td>
+                      <td>{file.accountsAcceptTaplinkMultipage}</td>
+                      <td>{file.accountsSent}</td>
                       <td className="td-red">{file.accountsDeniedCount}</td>
                       {getFileStatus(
                         file.status,

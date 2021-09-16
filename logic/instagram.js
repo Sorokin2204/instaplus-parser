@@ -3,6 +3,7 @@ const utils = require('./utils');
 const { readFile } = require('fs');
 const { promisify } = require('util');
 const readFileAsync = promisify(readFile);
+const shttps = require('socks-proxy-agent'); //  npm i socks-proxy-agent
 
 const igClient = new IgApiClient();
 
@@ -35,6 +36,8 @@ exports.hasActiveSession = function () {
       const userId = igClient.state.cookieUserId;
       if (isLoaded && userId) {
         igClient.user.info(userId).then((userInfo) => {
+          // console.log('CHECKPOINT : \n' + igClient.state.checkpoint); 
+          // console.log('CHALLANGE  : \n' + igClient.state.challenge); 
           resolve({ isLoggedIn: true, userInfo });
         });
       }
@@ -44,19 +47,34 @@ exports.hasActiveSession = function () {
   });
 };
 
-exports.login = function (username, password) {
+exports.login = function (username, password,proxyHost,proxyPort,proxyUser,proxyPass) {
   return new Promise((resolve, reject) => {
+    try {
     utils.clearCookieFiles();
     igClient.state.generateDevice(username);
-    igClient.simulate.preLoginFlow().then(() => {
+ igClient.request.defaults.agentClass = shttps; // apply agent class to request library defaults
+ igClient.request.defaults.agentOptions = {
+   // @ts-ignore
+   hostname: proxyHost, // proxy hostname
+   port: proxyPort, // proxy port
+   protocol: 'socks5:', // supported: 'socks:' , 'socks4:' , 'socks4a:' , 'socks5:' , 'socks5h:'
+   username: proxyUser, // proxy username, optional
+   password: proxyPass, // proxy password, optional
+ };
+    } catch (e) {
+      reject;
+    }
       igClient.account.login(username, password).then((userData) => {
         igClient.simulate.postLoginFlow().then(() => {
-          storeLoggedInSession(username).then(() => {
-            resolve(userData);
-          }).catch(reject);
+             resolve(userData);
+                // storeLoggedInSession(username)
+                //   .then(() => {
+                //     resolve(userData);
+                //   })
+                //   .catch(reject);
         }).catch(reject);
       }).catch(reject);
-    }).catch(reject);
+   
   });
 };
 
@@ -78,8 +96,16 @@ exports.twoFactorLogin = function (username, code, twoFactorIdentifier, trustThi
 };
 
 exports.logout = function () {
-  igClient.account.logout();
-  utils.clearCookieFiles();
+  return new Promise((resolve,reject) => {
+  igClient.account.logout().then(() => {
+    utils.clearCookieFiles();
+    resolve();
+  }).catch(() => {
+    reject();
+  })
+  })
+
+  
 };
 
 exports.isCheckpointError = (error) => {
@@ -97,6 +123,26 @@ exports.startCheckpoint = () => {
     });
   });
 };
+
+exports.getInfoCheckpoint = () => { 
+  return igClient.state.checkpoint;
+}
+
+exports.sendCodeToMail = () => {
+   return new Promise((resolve,reject) => {
+    igClient.challenge
+      .selectVerifyMethod(1, false)
+      .then(resolve)
+      .catch(reject);
+  });
+};
+
+exports.sendSecurityCode = (code) => {
+  return new Promise((resolve, reject) => {
+    igClient.challenge.sendSecurityCode(code).then(resolve).catch(reject);
+  });
+};
+
 
 exports.getChatList = function () {
   const chatsFeed = igClient.feed.directInbox();
