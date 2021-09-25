@@ -5,6 +5,7 @@ const Category = require('../models/Category');
 const File = require('../models/File');
 const BlackLink = require('../models/BlackLink');
 const SenderAccount = require('../models/SenderAccount');
+const Proxy = require('../models/Proxy');
 const fs = require('fs');
 const multer = require('multer');
 const path = require('path');
@@ -30,6 +31,8 @@ const utils = require('../logic/utils');
 const { resolve } = require('path');
 const nodemailer = require('nodemailer');
 const ImapClient = require('emailjs-imap-client').default;
+const fetch  = require('node-fetch');
+const moment = require('moment')
 // const { setTimeout } = require('timers/promises');
 
 // const shttps = require('socks-proxy-agent'); // you should install SOCKS5 client via: npm i socks-proxy-agent
@@ -52,28 +55,11 @@ router.post('/add', upload.single('excelFile'), async (req, res) => {
 var io = req.app.get('socketio');
 
 var numberAccount = 0; 
-    // const black = new BlackLink({
-    //   domainName: 'google.com',
-    // });
-
-    // await black.save();
-
-    // const cat2 = new Category({
-    //   name: 'Какой то лидер',
-    //   keyWords: ['лидер', 'бизнес'],
-    // });
-
-    // await cat2.save();
-
     ///Convert form Excel file to JSON
     let sheetJson = excelToJson(req.file.buffer);
-    //var accountQuantity = sheetJson.length;
-    var accountQuantity = 40;
     /// Check file exist
     isOldFile = await File.exists({ excelFileName: req.file.originalname });
-
-   
-    sheetJson = sheetJson.slice(20, 60);
+    // sheetJson = sheetJson.slice(60, 200);
     ///Get all login from excel
     sheetAccounts = sheetJson.map((acc) => acc.Логин);
 
@@ -91,7 +77,7 @@ var numberAccount = 0;
         );
       });
     }
-
+var accountQuantity = sheetJson.length;
     if (sheetJson.length == 0) {
       throw new Error('Новых аккаунтов не найдено');
     }
@@ -132,8 +118,6 @@ var numberAccount = 0;
          Promise.allSettled(
            sheetJson.map((obj) => {
              return new Promise((resolve, reject) => {
-               // sheetJson.forEach((obj) => {
-               // Object.entries(obj).forEach(([key, value]) => {});
                let newAccount = new Account({
                  login: obj['Логин'],
                  title: obj['Имя аккаунта'],
@@ -160,71 +144,82 @@ var numberAccount = 0;
                ///Scaping instagram URL - get messangers and list sites
                if (newAccount.links.instagramLink) {
                  if (newAccount.links.instagramLink.includes('taplink.cc')) {
-                   grabpage(browser, newAccount.links.instagramLink)
-                     .then((fileName) => {
-                       newAccount.links.tapLinkImage = fileName;
-                     })
-                     .then(() => {
-                       let promise = scrapingUrl(newAccount);
-                       promise
-                         .then(() => {
-                           filterUrl(browser, newAccount)
-                             .then(() => {
-                               resolve(newAccount);
-                             })
-                             .catch(() => {
-                               resolve(newAccount);
-                               console.log(
-                                 '\x1b[31m%s\x1b[0m',
-                                 'PROMISE ALL ERROR',
-                               );
-                             });
-                         })
-                         .catch((reason) => {
-                           resolve(newAccount);
-                           console.log(
-                             '\x1b[31m%s\x1b[0m',
-                             'TAPLINK ANALYZE ERROR - ' +
-                               reason +
-                               '\n' +
-                               'LINK - ' +
-                               newAccount.links.instagramLink,
-                           );
-                         });
-                     });
+                   newAccount.status = 'acceptTaplinkNoSite';
+                   resolve(newAccount);
+                  //  grabpage(browser, newAccount.links.instagramLink)
+                  //    .then((fileName) => {
+                  //      newAccount.links.tapLinkImage = fileName;
+                  //    })
+                  //    .then(() => {
+                  //      let promise = scrapingUrl(newAccount);
+                  //      promise
+                  //        .then(() => {
+                  //          filterUrl(browser, newAccount)
+                  //            .then(() => {
+                  //              resolve(newAccount);
+                  //            })
+                  //            .catch(() => {
+                  //              resolve(newAccount);
+                  //              console.log(
+                  //                '\x1b[31m%s\x1b[0m',
+                  //                'PROMISE ALL ERROR',
+                  //              );
+                  //            });
+                  //        })
+                  //        .catch((reason) => {
+                  //          resolve(newAccount);
+                  //          console.log(
+                  //            '\x1b[31m%s\x1b[0m',
+                  //            'TAPLINK ANALYZE ERROR - ' +
+                  //              reason +
+                  //              '\n' +
+                  //              'LINK - ' +
+                  //              newAccount.links.instagramLink,
+                  //          );
+                  //        });
+                  //    });
                  } else if (
                    newAccount.links.instagramLink.includes('wa.me/') ||
                    newAccount.links.instagramLink.includes('whatsapp.com/')
                  ) {
+                   newAccount.status = 'acceptNoSite';
                    newAccount.messengers.whatsApp.push(
                      newAccount.links.instagramLink,
                    );
                    resolve(newAccount);
                  } else if (newAccount.links.instagramLink.includes('t.me/')) {
+                   newAccount.status = 'acceptNoSite';
                    newAccount.messengers.telegram.push(
                      newAccount.links.instagramLink,
                    );
                    resolve(newAccount);
-                 } else if (
-                   !newAccount.links.instagramLink.includes('facebook') &&
-                   !newAccount.links.instagramLink.includes('youtu.be') &&
-                   !newAccount.links.instagramLink.includes('youtube')
-                 ) {
-                   newAccount.links.selectedLink =
-                     newAccount.links.instagramLink;
-                   grabpage(browser, newAccount.links.instagramLink).then(
-                     (fileName) => {
-                       newAccount.links.filterLinks.push({
-                         link: newAccount.links.instagramLink,
-                         image: fileName,
-                       });
+                 } else {
+                   let domain = psl.get(extractHostname(filterLink.link));
+                   BlackLink.exists({ domainName: domain }).then(
+                     (isBlackLink) => {
+                       if (isBlackLink) {
+                        newAccount.status = 'acceptNoSite';
+                       } else {
+                         newAccount.status = 'pendingProcessing';
+                       }
                        resolve(newAccount);
+                       
                      },
                    );
-                 } else {
-                   resolve(newAccount);
+                  //  newAccount.links.selectedLink =
+                  //    newAccount.links.instagramLink;
+                  //  grabpage(browser, newAccount.links.instagramLink).then(
+                  //    (fileName) => {
+                  //      newAccount.links.filterLinks.push({
+                  //        link: newAccount.links.instagramLink,
+                  //        image: fileName,
+                  //      });
+                  //      resolve(newAccount);
+                  //    },
+                  //  );
                  }
                } else {
+                  newAccount.status = 'acceptNoSite';
                  resolve(newAccount);
                }
 
@@ -254,28 +249,13 @@ var numberAccount = 0;
                }
                newAccounts.push(newAccount);
                ///Check instagram PHONE on messengers  - get messegmers
-               // if (newAccount.phone && (!newAccount.messengers.telegram || !newAccount.messengers.whatsApp)) {
-               //WhatsApp ALI CHECK NUMBER
-               //Telegram ALI CHECK NUMBER
-               //Viber ALI CHECK NUMBER
-               // }
                ///Check instagram DESCRIPTION on messengers - get messegmers
-               // if (
-               //   newAccount.description &&
-               //   (!newAccount.messengers.telegram || !newAccount.messengers.whatsApp)
-               // ) {
-               //GET NUMBERS FORM TEXT
-               //Check each number
-               //WhatsApp ALI CHECK NUMBER
-               //Telegram ALI CHECK NUMBER
-               //Viber ALI CHECK NUMBER
-               // }
              }).then((account) => {
-               if (account.links.filterLinks.length == 0) {
-                 account.status = 'acceptNoSite';
-               } else {
-                 account.status = 'pendingProcessing';
-               }
+              //  if (account.links.filterLinks.length == 0) {
+              //    account.status = 'acceptNoSite';
+              //  } else {
+              //    account.status = 'pendingProcessing';
+              //  }
                numberAccount++;
                console.log(`Осталось: ${numberAccount}/${accountQuantity}`);
                
@@ -526,10 +506,22 @@ if (filterLink.image && fs.existsSync(__uploadDir + filterLink.image)) {
 let authenticatedUser;
 router.get('/send/:id', async (req,res) => {
   try {
-     res.status(201).json({ message: 'Отправка началась' });
- // generateAccountMessage(req.params.id);
+    
+//generateAccountMessage(req.params.id);
 
-startSend(req.params.id);
+  
+// let proxyId = '38253';
+// let apiTokenProxy = '1045394ebaaea5e0b190f61e157ecf33';
+// let url = `https://mobileproxy.space/api.html?command=get_my_proxy`;
+// mobileProxiApi(apiTokenProxy, url);
+
+await findProxy(req.params.id);
+
+//startSend(req.params.id);
+
+ res.status(201).json({ message: 'Отправка началась' });
+
+
   //  var smtpTransport = nodemailer.createTransport({
   //    service: 'Mail.ru',
   //    auth: {
@@ -725,11 +717,28 @@ function getAllMessagesFromMail(client) {
 router.post('/sender-accounts/add', async (req, res) => {
   try {
     const { listSenderAccounts } = req.body;
- let arrSenderAccounts = listSenderAccounts.split('\n').map((acc) => {
+ let arrSenderAccounts = listSenderAccounts.split(';||\n').map((acc) => {
+   let cookieDivide = acc.indexOf('|');
+   if (cookieDivide != -1) {
+     acc = acc.slice(0, cookieDivide);
+   }
+console.log(acc);
    let splitAcc = acc.split(':');
-   return { login: splitAcc[0] , password: splitAcc[1]}
+   if (splitAcc[2] && splitAcc[3]) {
+     return {
+       login: splitAcc[0],
+       password: splitAcc[1],
+       email: splitAcc[2],
+       emailPassword: splitAcc[3],
+     };
+   } else {
+     return {
+       login: splitAcc[0],
+       password: splitAcc[1],
+     };
+   }
  });
- console.log(arrSenderAccounts);
+ console.log(arrSenderAccounts.length);
 
  await SenderAccount.insertMany(arrSenderAccounts).then(() => {
 
@@ -786,6 +795,71 @@ router.get('/sender-accounts/list', async (req, res) => {
   }
 });
 
+
+router.post('/proxy/add', async(req,res) => {
+  try {
+ const { newProxy } = req.body;
+ //console.log(newProxy);
+   let newProxyArr = newProxy.split('\n');
+   if(newProxyArr.length != 5) {
+    throw new Error('Должно быть 5 строк') 
+   }
+
+   let dateArr = newProxyArr[0].split(', ');
+   let date = dateArr[0].split('.');
+   let time = dateArr[1].split(':');
+   let expirationDate = new Date(
+     date[2],
+     date[1] - 1,
+     date[0],
+     time[0],
+     time[1],
+   );
+
+   console.log(date[0], date[1]  , date[2], time[0], time[1]);
+if(typeof expirationDate.getMonth !== 'function') {
+  throw new Error('Ошибка конвертации даты'); 
+}
+newProxyArr[0] = expirationDate;
+
+   let proxy = new Proxy({
+     lastActiveDate: undefined,
+     expirationDate: newProxyArr[0],
+     host: newProxyArr[1],
+     port: newProxyArr[2],
+     login: newProxyArr[3],
+     password: newProxyArr[4],
+     status: 'work'
+   });
+
+   await proxy.save();
+
+    res.status(201).json({ message: 'Прокси добавленно' });
+  } catch (e) {
+    console.log('ERROR ADD PROXY - ' + e.message);
+    res.status(500).json({ message: e.message });
+  }
+});
+
+
+router.get('/proxy/list', async (req, res) => {
+  try {
+    await Proxy.find({})
+      .then((proxies) => {
+        res.status(201).json({
+          message: 'Добавленны аккаунты оправители',
+          proxies: proxies,
+        });
+      })
+      .catch((e) => {
+        console.log('ERROR ADD SENDER ACCOUNTS - ' + e.message);
+        res.status(500).json({ message: e.message });
+      });
+  } catch (e) {
+    console.log('ERROR GET SENDER ACCOUNTS - ' + e.message);
+    res.status(500).json({ message: e.message });
+  }
+});
 
 function getSortedAccounts(accounts) {
   let accountsSorted = [];
@@ -895,68 +969,171 @@ function randomIntFromInterval(min, max) {
 //     });
 // }
 
-function startSend(FileId) {
-  ////Ищем 15 сообщений
+
+function mobileProxiApi(apiTokenProxy, url) {
+
+ fetch(url, {
+   method: 'get',
+   headers: new fetch.Headers({
+     Authorization: `Bearer ${apiTokenProxy}`,
+   }),
+ })
+   .then((res) => res.json())
+   .then((out) => {
+     console.log(out);
+   })
+   .catch((err) => {});
+ 
+
+}
+
+async function findProxy(FileId) {
+  try {
+let listProxy = await Proxy.find({ status: { $in: ['work'] } });
+      if (listProxy.length == 0) {
+        console.log('NOT FOUND WORK PROXY');
+        return;
+      }
+     
+      for(let proxy of listProxy) {
+        // listProxy.map((proxy) => {
+        if (moment(proxy.expirationDate).isBefore(new Date())) {
+          Proxy.findByIdAndUpdate(proxy._id, { status: 'not_paid' }).then(
+            () => {
+              console.log('PROXY NOT PAID DETECT');
+            },
+          );
+        } else {
+          if (proxy.lastActiveDate) {
+            if (proxy.status == 'work') {
+              if (
+                moment(proxy.lastActiveDate).add(1, 'hours').isBefore(new Date())
+              ) {
+                  console.log('START LOGIN AFTER 1 HOURS PROXY');
+                await startSend(FileId, proxy);
+              }
+            } else if (proxy.status == 'unknown_error') {
+            }
+          } else {
+            console.log('START LOGIN NEW PROXY');
+            
+            await startSend(FileId, proxy);
+          }
+        }
+        // });
+    
+    }
+    setTimeout(() => {
+      findProxy(FileId);
+    }, 10000);
+  } catch(e) {
+    console.log('ERROR OR NOT FOUND MESSAGES/SENDERS');
+return;
+  }
+ 
+}
+
+function startSend(FileId,proxy) {
+  return new Promise((resolve,reject) => {
+     setTimeout(() => {
+    ////Ищем 15 сообщений
     Account.find({
       File: FileId,
       status: { $regex: 'accept' },
     })
       .select('_id login message status')
-      .limit(15)
+      .limit(17)
       .then((accounts) => {
         if (accounts.length != 0) {
           ////Если нашло больше 0,то ищем авторег
-        //  var OneDay = new Date().getTime() + 1 * 24 * 60 * 60 * 1000;
-        SenderAccount.findOne({
-          isWork: true,
-          $or: [
-            { lastSentDate: { $exists: false } },
-            // { lastSentDate: { $gte: OneDay } },
-          ],
-        }).then((senderAccount) => {
-          if (senderAccount) {
-            ////Нашел активные авторег
-            try {
-               sending(senderAccount, accounts)
-                 .then(() => {
-                   instagram
-                     .logout()
-                     .then(() => {
-                         console.log('LOGOUT ACCEPT');
-                       startSend(FileId);
-                     })
-                     .catch(() => {
-                       console.log('ERROR LOGOUT');
-                     });
-                 })
-                 .catch(() => {
-                   console.log('ERROR SEND MESSAGE WITH AUTOREG');
-                   instagram.logout().then(() => {
-                     console.log('LOGOUT ACCEPT');
-                   });
-                 });
-            } catch (error) {
-               instagram.logout().then(() => {
-                 console.log('LOGOUT ACCEPT');
-               });
+          //  var OneDay = new Date().getTime() + 1 * 24 * 60 * 60 * 1000;
+          SenderAccount.findOne({
+            isWork: true,
+            $or: [
+              { lastSentDate: { $exists: false } },
+              // { lastSentDate: { $gte: OneDay } },
+            ],
+          }).then((senderAccount) => {
+            if (senderAccount) {
+              ////Нашел активные авторег
+              try {
+                sending(senderAccount, accounts, proxy)
+                  .then((error) => {
+                    if (error) {
+                     Proxy.findByIdAndUpdate(proxy._id, {
+   status: 'unknown_error',
+   numberUnknownErrors: proxy.numberUnknownErrors + 1,
+   lastActiveDate: new Date(),
+ }).then(() => {
+
+ });
+                       
+                    }
+                    else {
+                      Proxy.findByIdAndUpdate(proxy._id, {
+                        status: 'work',
+                        lastActiveDate: new Date(),
+                      }).then(() => {
+
+                      });
+                    }
+                    setTimeout(() => {
+                      instagram
+                        .logout()
+                        .then(() => {
+                          console.log('LOGOUT ACCEPT');
+                          resolve();
+                          // startSend(FileId);
+                        })
+                        .catch(() => {
+                          console.log('ERROR LOGOUT');
+                          resolve();
+                        });
+                    }, 5000);
+                  })
+                  .catch(() => {
+                    setTimeout(() => {
+                      console.log('ERROR SEND MESSAGE WITH AUTOREG');
+                      instagram.logout().then(() => {
+                        console.log('LOGOUT ACCEPT');
+                      });
+                    }, 5000);
+                  });
+              } catch (error) {
+                setTimeout(() => {
+                  console.log('ERROR SEND MESSAGE WITH AUTOREG');
+                  instagram.logout().then(() => {
+                    console.log('LOGOUT ACCEPT');
+                    resolve();
+                  });
+                }, 5000);
+              }
+            } else {
+              console.log('SENDER ACCOUNTS EMPTY');
+               reject(new Error());
+              ///Авторегов валидных нет
             }
-          } else {
-            console.log('SENDER ACCOUNTS EMPTY');
-            ///Авторегов валидных нет
-          }
-        });
+          });
         } else {
-           console.log('ACCEPTED ACCOUNTS EMPTY');
+          console.log('ACCEPTED ACCOUNTS EMPTY');
+          File.findByIdAndUpdate(FileId, { status: 'complete' }).then(() => {
+            console.log('CHANGE FILE STATUS ACCEPT');
+            reject(new Error());
+          });
           ///Иначе все сообщения отправлены
         }
         // let accountsSorted = getSortedAccounts(accounts);
       })
       .catch(() => {
         console.log('ERROR GET ACCEPTED ACCOUNTS');
+        reject(new Error());
       });
+     
+  }, 10000);
+  })
 }
 
-function sending(senderAccount, accounts) {
+function sending(senderAccount, accounts,proxy) {
 return new Promise((resolve,reject) => {
   try {
       // instagram
@@ -968,8 +1145,8 @@ return new Promise((resolve,reject) => {
       //       if (authenticatedUser) console.log('LOGIN FROM COOKIE ACCEPT')
             
       //     } else {
-            console.log('TRY LOGIN');
-            login(senderAccount.login, senderAccount.password)
+            console.log('TRY LOGIN - ' + '@' + senderAccount.login + ' - ' + proxy.host);
+            login(senderAccount,proxy)
               .then(() => {
                 new Promise(function (resolve) {
                   setTimeout(resolve, 3000);
@@ -977,47 +1154,85 @@ return new Promise((resolve,reject) => {
                   ////Если успешно вошли, ищем и отправляем сообщения
                   processSend(accounts)
                     .then(() => {
-                      ////Если прошелся по всем аккаунтам и инстаграм не заблокировал ПОИСК и ОТПРАВКУ
-                      setStatusSenderAccount(senderAccount.login, true)
-                        .then(() => {
-                          console.log('SENDER ACCOUNT CHANGE STATUS ACCEPT');
-                          resolve();
-                        })
-                        .catch((e) => {
-                          reject();
-                          console.log(
-                            'ERROR CHANGE SENDER ACCOUNT - ' + e.message,
-                          );
-                        });
+                     let packMessageIds = accounts.map((acc) => acc._id);
+                    Account.countDocuments({
+                       _id: { $in: packMessageIds },
+                       status: 'successfullySent',
+                     }).then((successSentCount) => {
+                       console.log('ALL SENT - ' + successSentCount);
+                       ////Если прошелся по всем аккаунтам и инстаграм не заблокировал ПОИСК и ОТПРАВКУ
+                       setStatusSenderAccount(proxy.host,
+                         senderAccount.login,
+                         successSentCount,
+                         true,
+                       )
+                         .then(() => {
+                           console.log('SENDER ACCOUNT CHANGE STATUS ACCEPT');
+                           resolve();
+                         })
+                         .catch((e) => {
+                           reject();
+                           console.log(
+                             'ERROR CHANGE SENDER ACCOUNT - ' + e.message,
+                           );
+                         });
+                     });
+                    
+                      
                     })
-                    .catch(() => {
-                      ///Если инстаграм забанил аккаунт при поиские или отправке
-                      ///Если не смогли войти, помечаем аккаунт неактивным
-                      setStatusSenderAccount(senderAccount.login, false)
-                        .then(() => {
-                          console.log('SENDER ACCOUNT CHANGE STATUS ACCEPT');
-                          resolve();
-                        })
-                        .catch((e) => {
-                          reject();
-                          console.log(
-                            'ERROR CHANGE SENDER ACCOUNT - ' + e.message,
-                          );
+                    .catch((error) => {
+                        let packMessageIds = accounts.map(acc => acc._id);
+                        Account.countDocuments({
+                          _id: { $in: packMessageIds },
+                          status: 'successfullySent',
+                        }).then((successSentCount) => {
+                          console.log('ALL SENT - ' + successSentCount);
+                          ///Если инстаграм забанил аккаунт при поиские или отправке
+                          ///Если не смогли войти, помечаем аккаунт неактивным
+                          setStatusSenderAccount(proxy.host,senderAccount.login,successSentCount, false,error)
+                            .then(() => {
+                              console.log(
+                                'SENDER ACCOUNT CHANGE STATUS ACCEPT',
+                              );
+                              resolve();
+                            })
+                            .catch((e) => {
+                              reject();
+                              console.log(
+                                'ERROR CHANGE SENDER ACCOUNT - ' + e.message,
+                              );
+                            });
                         });
+                        
+                      
                     });
                 });
               })
-              .catch(() => {
+              .catch((error) => {
                 ///Если не смогли войти, помечаем аккаунт неактивным
-                setStatusSenderAccount(senderAccount.login, false)
-                  .then(() => {
-                    console.log('SENDER ACCOUNT CHANGE STATUS ACCEPT');
-                    resolve();
-                  })
-                  .catch((e) => {
-                    reject();
-                    console.log('ERROR CHANGE SENDER ACCOUNT - ' + e.message);
-                  });
+                if (
+                  error == 'challenge_required' ||
+                  error == 'feedback_required'
+                ) {
+                  setStatusSenderAccount(
+                    proxy.host,
+                    senderAccount.login,
+                    0,
+                    false,
+                    error,
+                  )
+                    .then(() => {
+                      console.log('SENDER ACCOUNT CHANGE STATUS ACCEPT');
+                      resolve();
+                    })
+                    .catch((e) => {
+                      reject();
+                      console.log('ERROR CHANGE SENDER ACCOUNT - ' + e.message);
+                    });
+                } else {
+                  resolve(error);
+                }
+                
               });
         //   }
         // })
@@ -1072,7 +1287,7 @@ function  findAndSend(login,message) {
                       });
                   })
                   .catch((error) => {
-                    reject();
+                    reject(error);
                     setStatusAccount(login);
                     getErrorMsg('!!!ERROR SEND MESSAGE : ', error);
                   });
@@ -1088,7 +1303,7 @@ function  findAndSend(login,message) {
               console.log('NOT FOUND ACCOUNT');
             }
           } catch (error) {
-            reject();
+            reject(error);
             getErrorMsg(
               '!!!ERROR SEARCH ACCEPT, BUT NOT MATCH : ',
               error.message,
@@ -1096,17 +1311,20 @@ function  findAndSend(login,message) {
           }
         })
         .catch((error) => {
-          reject();
+          reject(error);
           getErrorMsg('!!!ERROR SEARCH : ', error);
         });
-    }, 500);
+    }, 100);
   })
 }
 
 
-function setStatusAccount(login, status = 'failedSent') {
+function setStatusAccount(login,status = 'failedSent') {
  return new Promise((resolve,reject) => {
- Account.findOneAndUpdate({ login: login }, { status: status })
+ Account.findOneAndUpdate(
+   { login: login },
+   { status: status },
+ )
    .then(() => {
      console.log('STATUS ACCOUNT CHANGE !');
      resolve();
@@ -1118,97 +1336,118 @@ function setStatusAccount(login, status = 'failedSent') {
  })
 }
 
-function setStatusSenderAccount (login,isWork) {
-return SenderAccount.findOneAndUpdate({login: login }, {
-  isWork: isWork,
-  lastSentDate: new Date(),
-});
+function setStatusSenderAccount(proxyHost, login, successSentCount,isWork, error = '') {
+  return SenderAccount.findOneAndUpdate(
+    { login: login },
+    {
+      isWork: isWork,
+      lastSentDate: new Date(),
+      countSent: successSentCount,
+      proxyHost: proxyHost,
+      errorStatus: error,
+    },
+  );
 }
 
-  const login = (username, password) => {
-    return new Promise((resolve,reject) => {
- instagram
-   .login(
-     username,
-     password,
-     '213.232.117.229',
-     30010,
-     'daniil_sorokin_228_g',
-     '66c0bc2ca5',
-   )
-   .then((userInfo) => {
-     console.log('LOGIN ACCEPT');
-     authenticatedUser = userInfo;
-     resolve(userInfo);
-   })
-   .catch((error) => {
-     if (instagram.isCheckpointError(error)) {
-        getErrorMsg('!!!ERROR LOGIN CHECKPOINT : ', error);
+  const login = (senderAccount, proxy) => {
+    return new Promise((resolve, reject) => {
+      instagram
+        .login(
+          senderAccount.login,
+          senderAccount.password,
+          proxy.host,
+          proxy.port,
+          proxy.login,
+          proxy.password,
+        )
+        .then((userInfo) => {
+          console.log('LOGIN ACCEPT');
+          authenticatedUser = userInfo;
+          resolve(userInfo);
+        })
+        .catch((error) => {
+          if (instagram.isCheckpointError(error)) {
+   let checkpointInfo = JSON.stringify(instagram.getInfoCheckpoint());
+   console.log('CHECKPOINT  - ' + checkpointInfo);
 
-console.log('CHECKPOINT  - ' + JSON.stringify(instagram.getInfoCheckpoint())); 
-//console.log('CHALLENGE   - ' + JSON.stringify(instagram.getChallengeCheckpoint())); 
-instagram.sendCodeToMail().then(() => {
-  console.log('CODE SEND TO MAIL');
- getCodeFromMail('wacxiv8qc@mail.ru', '3G07pzxtDdW').then((code) => {
-   if(code) {
-     instagram.sendSecurityCode(code).then(() => {
-         console.log('SECURITY CODE ACCEPT. TRY LOGIN');
-         login(username, password).then(() => {
-          console.log('LOGIN REPEAT ACCEPT'); 
-          resolve();
-         }).catch(() => {
-           console.log('!!! ERROR LOGIN REPEAT. EXIT');
-           reject();
-         })
-     }).catch(() => {
-          console.log('!!! ERROR PASS CODE WRONG');
-          reject();
-     })
-console.log('GET CODES - ' + code);
-   } else {
-       console.log('MESSAGE DONT FOUND INSTAGRAM CODE');
-         reject();
-   }
-   
- }).catch(() => {
-    console.log('!!! ERROR LOGIN IN EMAIL - ' + error);
-  
- });
-}).catch((error) => {
-  console.log('!!! ERROR SEND CODE - ' + error);
-  reject();
-})
-//  instagram
-//    .startCheckpoint()
-//    .then((challenge) => {
-//      console.log('CHALLANGE - ' + challenge.step_name);
-//      console.log(
-//        'CHECKPOINT  - ' + JSON.stringify(instagram.getInfoCheckpoint()),
-//      ); 
-//      //challenge.sendSecurityCode(data.code).then(resolve).catch(reject);
-//      //console.log('CHECKPOINT ACCEPT. NOW TRY LOGIN');
-//      //getErrorMsg('!!!ERROR RESOLVE CHECKPOINT : ', error);
-//    })
-//    .catch((error) => {
-//      getErrorMsg('!!!ERROR RESOLVE AUTO CHECKPOINT : ', error);
-//    });
-       
-     } else if (instagram.isTwoFactorError(error)) {
-       getErrorMsg('!!!ERROR LOGIN TWO FACTOR : ', error);
-       reject();
-     } else {
-       getErrorMsg('!!!ERROR LOGIN OTHER : ', error);
-       reject();
-     }
-   });
-    })
-   
+             let err = getErrorMsg('!!!ERROR LOGIN CHECKPOINT : ', error);
+            reject(err);
+            //console.log('CHALLENGE   - ' + JSON.stringify(instagram.getChallengeCheckpoint()));
+            //  if (email && emailPassword) {
+            //    console.log('CODE SEND TO MAIL');
+            //    instagram
+            //      .sendCodeToMail()
+            //      .then(() => {
+            //        getCodeFromMail(email, emailPassword)
+            //          .then((code) => {
+            //            if (code) {
+            //              instagram
+            //                .sendSecurityCode(code)
+            //                .then(() => {
+            //                  console.log('SECURITY CODE ACCEPT. TRY LOGIN');
+            //                  login(username, password, email, emailPassword)
+            //                    .then(() => {
+            //                      console.log('LOGIN REPEAT ACCEPT');
+            //                      resolve();
+            //                    })
+            //                    .catch(() => {
+            //                      console.log('!!! ERROR LOGIN REPEAT. EXIT');
+            //                      reject();
+            //                    });
+            //                })
+            //                .catch(() => {
+            //                  console.log('!!! ERROR PASS CODE WRONG');
+            //                  reject();
+            //                });
+            //              console.log('GET CODES - ' + code);
+            //            } else {
+            //              console.log('MESSAGE DONT FOUND INSTAGRAM CODE');
+            //              reject();
+            //            }
+            //          })
+            //          .catch(() => {
+            //            console.log('!!! ERROR LOGIN IN EMAIL - ' + error);
+            //          });
+            //      })
+            //      .catch((error) => {
+            //        console.log('!!! ERROR SEND CODE - ' + error);
+            //        reject();
+            //      });
+            //  } else {
+
+            //  }
+            
+            //  instagram
+            //    .startCheckpoint()
+            //    .then((challenge) => {
+            //      console.log('CHALLANGE - ' + challenge.step_name);
+            //      console.log(
+            //        'CHECKPOINT  - ' + JSON.stringify(instagram.getInfoCheckpoint()),
+            //      );
+            //      challenge.sendSecurityCode(data.code).then(resolve).catch(reject);
+            //      console.log('CHECKPOINT ACCEPT. NOW TRY LOGIN');
+            //      getErrorMsg('!!!ERROR RESOLVE CHECKPOINT : ', error);
+            //    })
+            //    .catch((error) => {
+            //      getErrorMsg('!!!ERROR RESOLVE AUTO CHECKPOINT : ', error);
+            //    });
+          } else if (instagram.isTwoFactorError(error)) {
+            getErrorMsg('!!!ERROR LOGIN TWO FACTOR : ', error);
+            reject();
+          } else {
+            let err = getErrorMsg('!!!ERROR LOGIN OTHER : ', error);
+            reject(err);
+          }
+        });
+    });
   };
 
   const getErrorMsg = (errorText, error) => {
-   console.log(
-     errorText + (error.text || error.message || 'An unknown error occurred.'),
+   let errorName = (error.text || error.message || 'An unknown error occurred.');
+    console.log(
+     errorText + errorName,
    );
+   return errorName
       };
 
 
@@ -1256,15 +1495,14 @@ function getMessage(status, messageLinks,isValidLinks) {
     case 'acceptNoSite':
       {
         preMessageLink = isValidLinks
-          ? `Например, у них:\n${messageLinks}`
+          ? `Я нашел ваших конкурентов, у них он есть:\n${messageLinks}`
           : '';
-        message = `Здравствуйте, я случайно нашел ваш аккаунт и заметил, что у вас нет сайта. 
-Если у вас только один инстаграм для рекламы своих услуг, то вы теряете львиную долю клиентов, которые заходят в первую очередь в поисковик и ищут нужные им услуги там.
-В вашей сфере большая конкуренция, особенно когда у каждого есть свой собственный сайт и соц.сети.
-После просмотра инстаграм, я как ваш клиент, задал себе следующий вопрос: “А где ваш сайт на котором можно посмотреть расценки, отзывы и т.д”.
-Клиенту будет проще закрыть ваш аккаунт и зайти к вашим конкурентам, чем спрашивать у вас в директе, то что можно найти на сайте, где будет современный дизайн, видео-отзывы и калькулятор цен.${preMessageLink}
+        message = `Добрый день, я посмотрел ваш профиль и хотел бы поделиться своим мнением со стороны клиента.${preMessageLink}
+После просмотра инстаграм, я задал себе вопрос: "А где ваш сайт на котором можно посмотреть расценки, отзывы и т.д".
+Мне стало проще довериться вашим конкурентам, чем расспрашивать в директе у вас, то что можно найти на сайте, где будет современный дизайн, видео-отзывы и калькулятор цен.
 Даже сайты с плохим дизайном, вызывают недоверие, а его отсутствие и подавно. 
-Я создаю сайты “под ключ” для бизнеса подобно вашему и если у вас появиться желание создать сайт, вот мой инстаграм @anton_webdesigner_`;
+Я могу сделать сайт, который поставит вас наравне с конкурентами и увеличить поток клиентов в 2-3 раза, за счет продвижение этого сайта в поисковике. Пишите мне в инстаграм @anton_webdesigner_
+(Я вам пишу не со своего аккаунта т.к инстаграм занижает рейтинг выдачи аккаунтов, которые отправляют длинные сообщения не подписчикам)`;
       }
       break;
     case 'acceptBadSite':
@@ -1515,8 +1753,8 @@ async function grabpage(browser, url) {
    
   } catch (error) {
        console.log('\x1b[31m%s\x1b[0m', 'SAVE IMAGE ERROR: ' + error.message);
-       console.log('\x1b[31m%s\x1b[0m', 'IMAGE: ' + fileName);
-      console.log('\x1b[31m%s\x1b[0m', 'URL: ' + url);
+      //  console.log('\x1b[31m%s\x1b[0m', 'IMAGE: ' + fileName);
+      // console.log('\x1b[31m%s\x1b[0m', 'URL: ' + url);
     return '';
   }
  

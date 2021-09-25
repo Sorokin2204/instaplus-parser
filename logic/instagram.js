@@ -50,7 +50,7 @@ exports.hasActiveSession = function () {
 exports.login = function (username, password,proxyHost,proxyPort,proxyUser,proxyPass) {
   return new Promise((resolve, reject) => {
     try {
-    utils.clearCookieFiles();
+  //  utils.clearCookieFiles();
     igClient.state.generateDevice(username);
  igClient.request.defaults.agentClass = shttps; // apply agent class to request library defaults
  igClient.request.defaults.agentOptions = {
@@ -66,7 +66,7 @@ exports.login = function (username, password,proxyHost,proxyPort,proxyUser,proxy
     }
       igClient.account.login(username, password).then((userData) => {
         igClient.simulate.postLoginFlow().then(() => {
-             resolve(userData);
+            resolve(userData);
                 // storeLoggedInSession(username)
                 //   .then(() => {
                 //     resolve(userData);
@@ -98,7 +98,7 @@ exports.twoFactorLogin = function (username, code, twoFactorIdentifier, trustThi
 exports.logout = function () {
   return new Promise((resolve,reject) => {
   igClient.account.logout().then(() => {
-    utils.clearCookieFiles();
+  //  utils.clearCookieFiles();
     resolve();
   }).catch(() => {
     reject();

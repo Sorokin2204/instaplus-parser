@@ -29,6 +29,7 @@
     "moment": "^2.29.1",
     "mongoose": "^5.13.7",
     "multer": "^1.4.3",
+    "node-fetch": "^2.6.1",
     "nodemailer": "^6.6.3",
     "pageres": "^6.2.3",
     "proxy-verifier": "^0.5.0",

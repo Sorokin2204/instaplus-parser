@@ -12,9 +12,11 @@ export const  ExportsPage = () => {
    const [isDisabled, setIsDisabled] = useState(true)
     const excelFile = useRef();
     const newSenderAccounts = useRef();
+    const newProxy= useRef();
     const message = useMessage();
     const [data, setData] = useState([]);
     const [senderAccounts, setSenderAccounts] = useState([]);
+    const [proxies, setProxies] = useState([]);
     const [loadingText, setLoadingText] = useState('');
     const changeHandlerAddFormExport = event => {
         excelFile.current.files[0] ? setIsDisabled(false) : setIsDisabled(true);
@@ -55,12 +57,31 @@ export const  ExportsPage = () => {
         console.log(e.message);
       }
     };
+
+        const ClickHandlerAddProxy = async (obj) => {
+          try {
+            
+            const data = await request(
+              `/api/exports/proxy/add/`,
+              'POST',
+              {
+                newProxy: newProxy.current,
+              },
+            );
+            message(data.message);
+            document.getElementById('newProxy').value = '';
+            getProxies();
+          } catch (e) {
+            console.log(e.message);
+          }
+        };
     
 
 useEffect(() => {
    var elems = document.querySelectorAll('.modal');
    var instances = window.M.Modal.init(elems);
    getSenderAccounts();
+   getProxies();
   if(loadingText == '') {
     console.log('USE EFFECT LOADING');
          getFiles();
@@ -126,7 +147,17 @@ useEffect(() => {
         }
       }
 
-
+      async function getProxies() {
+        try {
+          const dataProxies = await request(
+            '/api/exports/proxy/list/',
+            'GET',
+          );
+          setProxies(dataProxies.proxies);
+        } catch (e) {
+          console.log(e.message);
+        }
+      }
 
 
 
@@ -164,6 +195,15 @@ useEffect(() => {
                 </td>
               );
               break;
+            case 'complete':
+              return (
+                <td class="td-green">
+                  <div className="td-box">
+                    <span className="td-text">Завершено</span>
+                  </div>
+                </td>
+              );
+              break;
             default:
               break;
           }
@@ -177,6 +217,25 @@ useEffect(() => {
           })
           selectRowFile.classList.add('tr-active');
         }
+
+        const getDayAndHours = (lastDate) => {
+          let end = moment(lastDate) // some random moment in time (in ms)
+          let start = moment(); // some random moment after start (in ms)
+          const duration = moment.duration(moment(end).diff(moment(start)));
+
+          const days = Math.floor(duration.asDays()); // .asDays returns float but we are interested in full days only
+          const daysFormatted = days ? `${days}d ` : ''; // if no full days then do not display it at all
+
+          //Get Hours
+          const hours = duration.hours();
+          const hoursFormatted = `${hours}h `;
+
+          //Get Minutes
+          const minutes = duration.minutes();
+          const minutesFormatted = `${minutes}m`;
+
+          return [daysFormatted, hoursFormatted, minutesFormatted].join('');
+        };
 
     return (
       <div>
@@ -230,6 +289,10 @@ useEffect(() => {
           Аккаунты
         </button>
 
+        <button data-target="modal2" class="btn modal-trigger">
+          Прокси
+        </button>
+
         <div id="modal1" class="modal modal-fixed-footer">
           <div class="modal-content">
             <h4>Аккаунты отправители</h4>
@@ -252,9 +315,13 @@ useEffect(() => {
                 <table style={{ padding: '0px' }}>
                   <thead>
                     <tr>
+                      <th>Прокси</th>
                       <th>Логин</th>
                       <th>Пароль</th>
+                      <th>Почта</th>
+                      <th>Пароль от почты</th>
                       <th>Последняя отправка</th>
+                      <th>Отправленно</th>
                       <th>Статус</th>
                       <th></th>
                     </tr>
@@ -264,11 +331,15 @@ useEffect(() => {
                     {senderAccounts.map((acc) => {
                       return (
                         <tr>
+                          <td>{acc?.proxyHost}</td>
                           <td>{acc.login}</td>
                           <td>{acc.password}</td>
-
-                          {moment(acc.lastSentDate).isAfter(new Date()) ||
-                          !acc.lastSentDate ? (
+                          <td>{acc?.email}</td>
+                          <td>{acc?.emailPassword}</td>
+                          <td>{acc?.countSent}</td>
+                          {moment(acc.lastSentDate)
+                            .add(1, 'days')
+                            .isBefore(new Date()) || !acc.lastSentDate ? (
                             <td className="td-green">
                               {!acc.lastSentDate
                                 ? '-'
@@ -290,7 +361,10 @@ useEffect(() => {
                             <td className="td-red">Не работает</td>
                           )}
                           <td>
-                            <button className="btn" data-id={acc._id} onClick={ClickHandlerActiveSenderAccount}>
+                            <button
+                              className="btn"
+                              data-id={acc._id}
+                              onClick={ClickHandlerActiveSenderAccount}>
                               Сброс
                             </button>
                           </td>
@@ -311,32 +385,75 @@ useEffect(() => {
           </div>
         </div>
 
-        {/* <input
-          type="file"
-          name="excelFile"
-          id="excelFile"
-          ref={excelFile}
-          onChange={changeHandlerAddFormExport}
-          accept=".xlsx"
-        /> */}
-        {/* <button onClick={registerHandlerAddFormExport}>Загрузить</button> */}
-        {/* {loading ? (
-          <div className="preloader-wrapper active">
-            <div className="spinner-layer spinner-red-only">
-              <div className="circle-clipper left">
-                <div className="circle"></div>
+        <div id="modal2" class="modal modal-fixed-footer">
+          <div class="modal-content">
+            <h4>Приватные прокси</h4>
+            <textarea
+              className="materialize-textarea"
+              name="newProxy"
+              id="newProxy"
+              cols="30"
+              rows="10"
+              placeholder="Вставьте инфо об приватном прокси"
+              onChange={(obj) => {
+                newProxy.current = obj.target.value;
+              }}></textarea>
+            <button className="btn" onClick={ClickHandlerAddProxy}>
+              Добавить
+            </button>
+
+            {proxies && proxies.length != 0 ? (
+              <div className="row">
+                <table style={{ padding: '0px' }}>
+                  <thead>
+                    <tr>
+                      <th>Адрес</th>
+                      <th>Логин</th>
+                      <th>Пароль</th>
+                      <th>Дата окончания</th>
+                      <th>Дата последней попытки</th>
+                      <th>Статус</th>
+                    </tr>
+                  </thead>
+
+                  <tbody>
+                    {proxies.map((proxy) => {
+                      return (
+                        <tr>
+                          <td>{proxy.host + ':' + proxy.port}</td>
+                          <td>{proxy.login}</td>
+                          <td>{proxy.password}</td>
+                          <td>{getDayAndHours(proxy.expirationDate)}</td>
+                          <td>
+                            {proxy.lastActiveDate ? (
+                              <td>
+                                {!proxy.lastActiveDate
+                                  ? '-'
+                                  : moment(proxy.lastActiveDate).format(
+                                      'DD.MM.YYYY  HH:MM:SS',
+                                    )}
+                              </td>
+                            ) : (
+                              '-'
+                            )}
+                          </td>
+                          <td>{proxy.status}</td>
+                        </tr>
+                      );
+                    })}
+                  </tbody>
+                </table>
               </div>
-              <div className="gap-patch">
-                <div className="circle"></div>
-              </div>
-              <div className="circle-clipper right">
-                <div className="circle"></div>
-              </div>
-            </div>
+            ) : (
+              ''
+            )}
           </div>
-        ) : (
-          ''
-        )} */}
+          <div class="modal-footer">
+            <a href="#!" class="modal-close waves-effect waves-green btn-flat">
+              Закрыть
+            </a>
+          </div>
+        </div>
 
         {data && data.length != 0 ? (
           <div className="row">
@@ -418,92 +535,3 @@ useEffect(() => {
       </div>
     );
 }
-  // {
-  //   data.map((account) => {
-  //     return (
-  //       <tr>
-  //         {/* <td>{el.login}</td>
-  //                         <td>{el.title}</td>
-  //                         <td>{el.phone}</td>
-  //                         <td>{el.email}</td>
-  //                         <td>{el.description}</td> */}
-  //         <td>
-  //           <ol>
-  //             {account.links.parsedLinks.map((el, i) => {
-  //               var color = 'red';
-  //               if (account?.links?.filterLinks.indexOf(el) !== -1)
-  //                 color = 'black';
-  //               else if (account?.messengers?.whatsApp.indexOf(el) !== -1)
-  //                 color = 'green';
-  //               else if (account?.messengers?.telegram.indexOf(el) !== -1)
-  //                 color = 'blue';
-  //               else if (account?.messengers?.viber.indexOf(el) !== -1)
-  //                 color = 'rgb(235, 53, 235)';
-  //               return (
-  //                 <li
-  //                   style={{
-  //                     color: color,
-  //                     fontWeight: 500,
-  //                     whiteSpace: 'nowrap',
-  //                   }}>
-  //                   {el}
-  //                 </li>
-  //               );
-  //             })}
-  //           </ol>
-  //         </td>
-  //         <td>
-  //           <ol>
-  //             {account.Category.map((el, i) => {
-  //               return <li>{el}</li>;
-  //             })}
-  //           </ol>
-  //         </td>
-  //         {/* <td>
-  //                           <ol>
-  //                             {el.links.filterLinks.map((el, i) => {
-  //                               return (
-  //                                 <li style={{ whiteSpace: 'nowrap' }}>
-  //                                   {el.slice(0, 40)}
-  //                                 </li>
-  //                               );
-  //                             })}
-  //                           </ol>
-  //                         </td>
-  //                         <td>
-  //                           <ol>
-  //                             {el.messengers.whatsApp.map((el, i) => {
-  //                               return (
-  //                                 <li style={{ whiteSpace: 'nowrap' }}>
-  //                                   {el.slice(0, 40)}
-  //                                 </li>
-  //                               );
-  //                             })}
-  //                           </ol>
-  //                         </td>
-  //                         <td>
-  //                           <ol>
-  //                             {el.messengers.telegram.map((el, i) => {
-  //                               return (
-  //                                 <li style={{ whiteSpace: 'nowrap' }}>
-  //                                   {el.slice(0, 40)}
-  //                                 </li>
-  //                               );
-  //                             })}
-  //                           </ol>
-  //                         </td>
-  //                         <td>
-  //                           <ol>
-  //                             {el.messengers.viber.map((el, i) => {
-  //                               return (
-  //                                 <li style={{ whiteSpace: 'nowrap' }}>
-  //                                   {el.slice(0, 40)}
-  //                                 </li>
-  //                               );
-  //                             })}
-  //                           </ol>
-  //                         </td> */}
-  //       </tr>
-  //     );
-  //   });
-  // }

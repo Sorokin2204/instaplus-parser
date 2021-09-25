@@ -16,7 +16,22 @@ var SenderAccount = new Schema({
     type: String,
     required: true,
   },
-
+  email: {
+    type: String,
+  },
+  emailPassword: {
+    type: String,
+  },
+  countSent: {
+    type: Number,
+    default: 0,
+  },
+  proxyHost: {
+    type: String,
+  },
+  errorStatus: {
+    type: String,
+  }
 });
 
 module.exports = model('SenderAccount', SenderAccount);
