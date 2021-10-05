@@ -28,20 +28,22 @@ const imageminWebp = require('imagemin-webp');
 const sharp = require('sharp');
 const instagram = require('../logic/instagram');
 const utils = require('../logic/utils');
+
 const { resolve } = require('path');
 const nodemailer = require('nodemailer');
 const ImapClient = require('emailjs-imap-client').default;
 const fetch  = require('node-fetch');
-const moment = require('moment')
-// const { setTimeout } = require('timers/promises');
-
-// const shttps = require('socks-proxy-agent'); // you should install SOCKS5 client via: npm i socks-proxy-agent
-
-// const { IgApiClient } = require('instagram-private-api');
-
+const moment = require('moment');
+const generatorPassword = require('generate-password');
+var generatorUsername = require('random-username-generator');
+const generatorEmail = require('../logic/instagram-signup/createFakeMail');
+const _ = require('lodash');
+const { fakeInstagramAccount } = require('../logic/instagram-signup/createAccount');
+const speech = require('@google-cloud/speech');
 const __appdir = path.dirname(require.main.filename);
 const __uploadDir = __appdir + '\\client\\public\\uploads\\';
-
+const yandex_speech = require('yandex-speech');
+const { spawn , exec} = require('child_process');
 function excelToJson(buffer) {
   let workbook = xlsx.read(buffer);
   const wsname = workbook.SheetNames[0];
@@ -509,17 +511,57 @@ router.get('/send/:id', async (req,res) => {
     
 //generateAccountMessage(req.params.id);
 
-  
 // let proxyId = '38253';
 // let apiTokenProxy = '1045394ebaaea5e0b190f61e157ecf33';
 // let url = `https://mobileproxy.space/api.html?command=get_my_proxy`;
 // mobileProxiApi(apiTokenProxy, url);
+//await findProxy(req.params.id);
+// startSend(
+//   req.params.id,
+//   {
+//     host: 'node-ru-188.astroproxy.com',
+//     port: 10222,
+//     login: 'verahrpr4033',
+//     password: 'fefe09',
+//   },
+//   'http://node-ru-188.astroproxy.com:10221/api/changeIP?apiToken=d53fa13c634f4b4c'
+// );
 
-await findProxy(req.params.id);
+// changeIp(
+//   'http://pubproxy.com/api/proxy?limit=1&format=txt&http=true&type=http',
+// ).then((proxy) => {
+// fakeInstagramAccount('185.103.181.2:8080');
+// });
+//
 
-//startSend(req.params.id);
 
+ 
+//  var dataToSend;
+//  const python = spawn('python', [
+//    __dirname + '\\python.py',
+//    'lol_user',
+//    "url_mp3_file"
+//  ]);
+
+//  python.stdout.on('data', function (data) {
+//    console.log('Pipe data from python script ...');
+//    dataToSend = data.toString();
+//    console.log(dataToSend);
+//  });
+//  python.on('close', (code) => {
+//    console.log(`child process close all stdio with code ${code}`);
+//    // send data to browser
+//  });
+
+ 
+
+
+
+ fakeInstagramAccount('node-ru-188.astroproxy.com:10221');
  res.status(201).json({ message: 'Отправка началась' });
+
+
+
 
 
   //  var smtpTransport = nodemailer.createTransport({
@@ -545,6 +587,75 @@ await findProxy(req.params.id);
   }
 
 })
+
+
+async function signup(proxy) {
+   let password = generatorPassword.generate({
+   length: 10,
+   numbers: true,
+ });
+generatorUsername.setSeperator('_');
+ let username =  await generatorUsername.generate();
+
+ let email = await generatorEmail.getFakeMail();
+
+ let fullName = await generatorFullName();
+
+ console.log(username, password, email, fullName);
+ instagram.signup(username,password,email,fullName,proxy)
+ .then(() => {
+   console.log('ACCOUNT WAS CREATED');
+   let newSenderAcc = new SenderAccount({login: username, password: password});
+    newSenderAcc.save().then(() => {
+      console.log('ACCOUNT SAVE IN BASE');
+    });
+
+   setTimeout(() => {
+     findAndSend('Yhhh', 'Hello dude').then(() => {
+       console.log('MESSAGE SENT FROM NEW ACC');
+     });
+   }, 3000);
+ }).catch((err) => {
+   console.log('FAIL ACCOUNT CREATED - ' + err);
+ })
+
+}
+
+const generatorFullName = function () {
+  const firstName = [
+    'Alan',
+    'Azad',
+    'Murat',
+    'Cevad',
+    'Levent',
+    'Erkin',
+    'Cem',
+    'Aras',
+    'Salih',
+    'Nur',
+    'Mustafa',
+    'Kerem',
+    'Yusuf',
+  ];
+  const surName = [
+    'Abak',
+    'Yasar',
+    'Kilic',
+    'Bilgic',
+    'Demir',
+    'Noga',
+    'Vinos',
+    'Shimizer',
+    'Dag',
+    'Kerim',
+    'Levent',
+    'Aram',
+    'Akdeniz',
+  ];
+
+  return _.sample(firstName) + ' ' + _.sample(surName);
+};
+
 
 function getCodeFromMail(email,password, prevCount = null) { 
   return new Promise((resolve,reject) => {
@@ -970,21 +1081,21 @@ function randomIntFromInterval(min, max) {
 // }
 
 
-function mobileProxiApi(apiTokenProxy, url) {
-
- fetch(url, {
-   method: 'get',
-   headers: new fetch.Headers({
-     Authorization: `Bearer ${apiTokenProxy}`,
-   }),
- })
-   .then((res) => res.json())
-   .then((out) => {
-     console.log(out);
-   })
-   .catch((err) => {});
- 
-
+function changeIp(url) {
+return new Promise((resolve,reject) => {
+    fetch(url, {
+      method: 'get',
+    })
+      .then((res) => res.text())
+      .then((out) => {
+        console.log(out);
+        resolve(out);
+      })
+      .catch((err) => {
+        console.log(err);
+        reject();
+      });
+})
 }
 
 async function findProxy(FileId) {
@@ -1033,7 +1144,7 @@ return;
  
 }
 
-function startSend(FileId,proxy) {
+function startSend(FileId,proxy,urlChangeIp) {
   return new Promise((resolve,reject) => {
      setTimeout(() => {
     ////Ищем 15 сообщений
@@ -1059,31 +1170,35 @@ function startSend(FileId,proxy) {
               try {
                 sending(senderAccount, accounts, proxy)
                   .then((error) => {
-                    if (error) {
-                     Proxy.findByIdAndUpdate(proxy._id, {
-   status: 'unknown_error',
-   numberUnknownErrors: proxy.numberUnknownErrors + 1,
-   lastActiveDate: new Date(),
- }).then(() => {
+//                     if (error) {
+//                      Proxy.findByIdAndUpdate(proxy._id, {
+//    status: 'unknown_error',
+//    numberUnknownErrors: proxy.numberUnknownErrors + 1,
+//    lastActiveDate: new Date(),
+//  }).then(() => {
 
- });
+//  });
                        
-                    }
-                    else {
-                      Proxy.findByIdAndUpdate(proxy._id, {
-                        status: 'work',
-                        lastActiveDate: new Date(),
-                      }).then(() => {
+//                     }
+//                     else {
+//                       Proxy.findByIdAndUpdate(proxy._id, {
+//                         status: 'work',
+//                         lastActiveDate: new Date(),
+//                       }).then(() => {
 
-                      });
-                    }
+//                       });
+//                     }
                     setTimeout(() => {
                       instagram
                         .logout()
                         .then(() => {
                           console.log('LOGOUT ACCEPT');
                           resolve();
-                          // startSend(FileId);
+                          setTimeout(() => {
+                             changeIp(urlChangeIp).then(() => {
+                               startSend(FileId, proxy, urlChangeIp);
+                             });
+                          }, 31000);
                         })
                         .catch(() => {
                           console.log('ERROR LOGOUT');
@@ -1129,7 +1244,7 @@ function startSend(FileId,proxy) {
         reject(new Error());
       });
      
-  }, 10000);
+  }, 1000);
   })
 }
 
@@ -1259,7 +1374,6 @@ function processSend(array) {
 
 
 
-
 function  findAndSend(login,message) {
   return new Promise((resolve,reject) => {
     setTimeout(() => {
@@ -1268,29 +1382,48 @@ function  findAndSend(login,message) {
         .then((users) => {
           try {
             if (users.users.length != 0) {
+            
+
               let userIndex = users.users.findIndex((user) => {
                 return user.username === login;
               });
               if (userIndex != -1) {
-                console.log('ACCOUNT FOUND ACCEPT!');
-                let nickNamePK = [users.users[userIndex].pk];
-                instagram
-                  .sendNewChatMessage(message, nickNamePK)
-                  .then((chat) => {
-                    console.log('MESSAGE SEND ACCEPT');
-                    setStatusAccount(login, 'successfullySent')
-                      .then(() => {
-                        resolve();
-                      })
-                      .catch(() => {
-                        resolve();
-                      });
-                  })
-                  .catch((error) => {
-                    reject(error);
-                    setStatusAccount(login);
-                    getErrorMsg('!!!ERROR SEND MESSAGE : ', error);
-                  });
+                  setTimeout(() => {
+                        console.log('ACCOUNT FOUND ACCEPT!');
+                        let nickNamePK = [users.users[userIndex].pk];
+                        instagram
+                          .sendNewChatMessage(message, nickNamePK)
+                          .then((chat) => {
+                            console.log('MESSAGE SEND ACCEPT');
+                            setStatusAccount(login, 'successfullySent')
+                              .then(() => {
+                                resolve();
+                              })
+                              .catch(() => {
+                                resolve();
+                              });
+                          })
+                          .catch((error) => {
+                            let errorStr = getErrorMsg(
+                              '!!!ERROR SEND MESSAGE : ',
+                              error,
+                            );
+                            if (
+                              errorStr.includes('socket hang up') ||
+                              errorStr.includes(
+                                'Client network socket disconnected before secure TLS connection was established',
+                              )
+                            ) {
+                              findAndSend(login, message).then(() => {
+                                setStatusAccount(login, 'successfullySent');
+                                resolve();
+                              });
+                            } else {
+                              reject(error);
+                              setStatusAccount(login);
+                            }
+                          });
+                  }, 500);
               } else {
                 resolve();
                 setStatusAccount(login);
@@ -1311,10 +1444,23 @@ function  findAndSend(login,message) {
           }
         })
         .catch((error) => {
+         
+        let errorStr = getErrorMsg('!!!ERROR SEARCH : ', error);
+        if (
+          errorStr.includes('socket hang up') ||
+          errorStr.includes(
+            'Client network socket disconnected before secure TLS connection was established',
+          )
+        ) {
+         findAndSend(login, message).then(() => {
+           setStatusAccount(login, 'successfullySent');
+           resolve();
+         });
+        } else {
           reject(error);
-          getErrorMsg('!!!ERROR SEARCH : ', error);
+        }
         });
-    }, 100);
+    }, 500);
   })
 }
 
@@ -1355,10 +1501,7 @@ function setStatusSenderAccount(proxyHost, login, successSentCount,isWork, error
         .login(
           senderAccount.login,
           senderAccount.password,
-          proxy.host,
-          proxy.port,
-          proxy.login,
-          proxy.password,
+          proxy
         )
         .then((userInfo) => {
           console.log('LOGIN ACCEPT');
