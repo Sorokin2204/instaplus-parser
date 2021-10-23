@@ -47,19 +47,18 @@ exports.hasActiveSession = function () {
   });
 };
 
-exports.login = function (username, password,proxyHost,proxyPort,proxyUser,proxyPass) {
+exports.login = function (username, password,proxy) {
   return new Promise((resolve, reject) => {
     try {
   //  utils.clearCookieFiles();
     igClient.state.generateDevice(username);
  igClient.request.defaults.agentClass = shttps; // apply agent class to request library defaults
  igClient.request.defaults.agentOptions = {
-   // @ts-ignore
-   hostname: proxyHost, // proxy hostname
-   port: proxyPort, // proxy port
+   hostname: proxy.host, // proxy hostname
+   port:  proxy.port, // proxy port
    protocol: 'socks5:', // supported: 'socks:' , 'socks4:' , 'socks4a:' , 'socks5:' , 'socks5h:'
-   username: proxyUser, // proxy username, optional
-   password: proxyPass, // proxy password, optional
+   username:  proxy.login, // proxy username, optional
+   password:   proxy.password, // proxy password, optional
  };
     } catch (e) {
       reject;
@@ -75,6 +74,27 @@ exports.login = function (username, password,proxyHost,proxyPort,proxyUser,proxy
         }).catch(reject);
       }).catch(reject);
    
+  });
+};
+
+
+exports.signup = function (username, password, email, fullName, proxy) {
+  return new Promise((resolve, reject) => {
+    igClient.state.generateDevice(username);
+    igClient.request.defaults.agentClass = shttps; // apply agent class to request library defaults
+    igClient.request.defaults.agentOptions = {
+      hostname: proxy.host, // proxy hostname
+      port: proxy.port, // proxy port
+      protocol: 'socks5:', // supported: 'socks:' , 'socks4:' , 'socks4a:' , 'socks5:' , 'socks5h:'
+      username: proxy.login, // proxy username, optional
+      password: proxy.password, // proxy password, optional
+    };
+
+    igClient.account.create(username, password, email, fullName).then((info) => {
+      resolve(info);
+    }).catch(() =>{ 
+      reject();
+    });
   });
 };
 

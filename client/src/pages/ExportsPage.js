@@ -293,7 +293,7 @@ useEffect(() => {
           Прокси
         </button>
 
-        <div id="modal1" class="modal modal-fixed-footer">
+        <div id="modal1" class="modal modal-fixed-footer" >
           <div class="modal-content">
             <h4>Аккаунты отправители</h4>
             <textarea
@@ -331,6 +331,7 @@ useEffect(() => {
                     {senderAccounts.map((acc) => {
                       return (
                         <tr>
+                          <td>{acc?.errorStatus?.split(';')[1]}</td>
                           <td>{acc?.proxyHost}</td>
                           <td>{acc.login}</td>
                           <td>{acc.password}</td>

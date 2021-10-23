@@ -508,78 +508,67 @@ if (filterLink.image && fs.existsSync(__uploadDir + filterLink.image)) {
 let authenticatedUser;
 router.get('/send/:id', async (req,res) => {
   try {
-    
-//generateAccountMessage(req.params.id);
+   // generateAccountMessage(req.params.id);
 
-// let proxyId = '38253';
-// let apiTokenProxy = '1045394ebaaea5e0b190f61e157ecf33';
-// let url = `https://mobileproxy.space/api.html?command=get_my_proxy`;
-// mobileProxiApi(apiTokenProxy, url);
-//await findProxy(req.params.id);
-// startSend(
-//   req.params.id,
-//   {
-//     host: 'node-ru-188.astroproxy.com',
-//     port: 10222,
-//     login: 'verahrpr4033',
-//     password: 'fefe09',
-//   },
-//   'http://node-ru-188.astroproxy.com:10221/api/changeIP?apiToken=d53fa13c634f4b4c'
-// );
+    // let proxyId = '38253';
+    // let apiTokenProxy = '1045394ebaaea5e0b190f61e157ecf33';
+    // let url = `https://mobileproxy.space/api.html?command=get_my_proxy`;
+    // mobileProxiApi(apiTokenProxy, url);
+    //await findProxy(req.params.id);
 
-// changeIp(
-//   'http://pubproxy.com/api/proxy?limit=1&format=txt&http=true&type=http',
-// ).then((proxy) => {
-// fakeInstagramAccount('185.103.181.2:8080');
-// });
-//
+    // changeIp(
+    //   'http://pubproxy.com/api/proxy?limit=1&format=txt&http=true&type=http',
+    // ).then((proxy) => {
+    // fakeInstagramAccount('185.103.181.2:8080');
+    // });
+    //
 
+    //  var dataToSend;
+    //  const python = spawn('python', [
+    //    __dirname + '\\python.py',
+    //    'lol_user',
+    //    "url_mp3_file"
+    //  ]);
 
- 
-//  var dataToSend;
-//  const python = spawn('python', [
-//    __dirname + '\\python.py',
-//    'lol_user',
-//    "url_mp3_file"
-//  ]);
+    //  python.stdout.on('data', function (data) {
+    //    console.log('Pipe data from python script ...');
+    //    dataToSend = data.toString();
+    //    console.log(dataToSend);
+    //  });s
+    //  python.on('close', (code) => {
+    //    console.log(`child process close all stdio with code ${code}`);
+    //    // send data to browser
+    //  });
 
-//  python.stdout.on('data', function (data) {
-//    console.log('Pipe data from python script ...');
-//    dataToSend = data.toString();
-//    console.log(dataToSend);
-//  });
-//  python.on('close', (code) => {
-//    console.log(`child process close all stdio with code ${code}`);
-//    // send data to browser
-//  });
-
- 
+    // startSend(
+    //   req.params.id,
+    //   {
+    //     host: 'node-ru-188.astroproxy.com',
+    //     port: 10222,
+    //     login: 'verahrpr4033',
+    //     password: 'fefe09',
+    //   },
+    //   'http://node-ru-188.astroproxy.com:10221/api/changeIP?apiToken=d53fa13c634f4b4c'
+    // );
 
 
+     fakeInstagramAccount('node-ru-188.astroproxy.com:10221');
+    res.status(201).json({ message: 'Отправка началась' });
 
- fakeInstagramAccount('node-ru-188.astroproxy.com:10221');
- res.status(201).json({ message: 'Отправка началась' });
-
-
-
-
-
-  //  var smtpTransport = nodemailer.createTransport({
-  //    service: 'Mail.ru',
-  //    auth: {
-  //      user: 'wacxiv8qc@mail.ru',
-  //      pass: '3G07pzxtDdW',
-  //    },
-  //  });
-  //  smtpTransport.verify(function (error, success) {
-  //    if (error) {
-  //      console.log(error);
-  //    } else {
-  //      console.log('Server is ready to take our messages');
-  //    }
-  //  });
-
- 
+    //  var smtpTransport = nodemailer.createTransport({
+    //    service: 'Mail.ru',
+    //    auth: {
+    //      user: 'wacxiv8qc@mail.ru',
+    //      pass: '3G07pzxtDdW',
+    //    },
+    //  });
+    //  smtpTransport.verify(function (error, success) {
+    //    if (error) {
+    //      console.log(error);
+    //    } else {
+    //      console.log('Server is ready to take our messages');
+    //    }
+    //  });
   }
   catch(e) {
     console.log('ERROR SENDER ACCOUNT - ' + e.message);
@@ -1204,7 +1193,7 @@ function startSend(FileId,proxy,urlChangeIp) {
                           console.log('ERROR LOGOUT');
                           resolve();
                         });
-                    }, 5000);
+                    }, 2000);
                   })
                   .catch(() => {
                     setTimeout(() => {
@@ -1212,7 +1201,7 @@ function startSend(FileId,proxy,urlChangeIp) {
                       instagram.logout().then(() => {
                         console.log('LOGOUT ACCEPT');
                       });
-                    }, 5000);
+                    }, 2000);
                   });
               } catch (error) {
                 setTimeout(() => {
@@ -1221,7 +1210,7 @@ function startSend(FileId,proxy,urlChangeIp) {
                     console.log('LOGOUT ACCEPT');
                     resolve();
                   });
-                }, 5000);
+                }, 2000);
               }
             } else {
               console.log('SENDER ACCOUNTS EMPTY');
@@ -1640,11 +1629,8 @@ function getMessage(status, messageLinks,isValidLinks) {
         preMessageLink = isValidLinks
           ? `Я нашел ваших конкурентов, у них он есть:\n${messageLinks}`
           : '';
-        message = `Добрый день, я посмотрел ваш профиль и хотел бы поделиться своим мнением со стороны клиента.${preMessageLink}
-После просмотра инстаграм, я задал себе вопрос: "А где ваш сайт на котором можно посмотреть расценки, отзывы и т.д".
-Мне стало проще довериться вашим конкурентам, чем расспрашивать в директе у вас, то что можно найти на сайте, где будет современный дизайн, видео-отзывы и калькулятор цен.
-Даже сайты с плохим дизайном, вызывают недоверие, а его отсутствие и подавно. 
-Я могу сделать сайт, который поставит вас наравне с конкурентами и увеличить поток клиентов в 2-3 раза, за счет продвижение этого сайта в поисковике. Пишите мне в инстаграм @anton_webdesigner_
+        message = `Здравствуйте, меня Антон. Я посмотрел ваш аккаунт и заметил, что у вас нет сайта. Многие пользователи ищут продукты и услуги через интернет, а именно через поисковик google или Яндекс. Ведение социальных сетей очень хорошо для бизнеса, но наличие сайта придает серьезности в глазах покупателей, а именно вы выглядите более солидно и дорого.
+Я занимаюсь созданием сайтов «под ключ» и помогаю зарабатывать своим клиентам. Если вам нужна моя более развернутая консультация, то вот мой инстаграм  @anton_webdesigner_
 (Я вам пишу не со своего аккаунта т.к инстаграм занижает рейтинг выдачи аккаунтов, которые отправляют длинные сообщения не подписчикам)`;
       }
       break;
